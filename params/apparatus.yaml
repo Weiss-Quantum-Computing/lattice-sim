@@ -46,7 +46,10 @@ polarization_rotator:
     source: "Kumar p.60-66; Wu p.47-48; Du p.102 (new EOMs, independent voltages)"
   v_half_wave_kV: {value: 5.5, status: thesis, note: "Transport-Optimizer uses 5.4 kV full scale"}
   driver: {value: "Trek 610-series, 20 V/us", status: current}
-  rotating_arm: {value: null, status: open, note: "which arm rotates in each direction"}
+  rotating_arm:
+    value: {x: right, y: left, z: top}
+    status: current
+    note: "arms named with each pair drawn as /\\ ; mapping to the model's k-vector sign convention still to fix against a measured displacement direction"
   extinction_ratio_vs_angle:
     value: null
     status: open
@@ -81,5 +84,5 @@ states:
 calibrations:
   transport_optimizer_ER316:
     value: "calibration_{F3,F4}_10kHz_ER316.csv in Transport-Optimizer"
-    status: open
-    note: "10kHz matches the quarter-depth x trap frequency; ER316 most plausibly an extinction ratio of 316 (25 dB). To be confirmed by reproducing the files in Phase 1."
+    status: computed
+    note: "ER316 = rotating-arm extinction ratio 316:1 (25 dB). The first-principles model reproduces the theta = 0 F3/F4 trap-frequency split (101.2 vs 101.1 Hz); see tests/test_lattice_potential.py. Mid-rotation residuals up to 0.13 um and 0.75 kHz near theta = pi/2 remain (figures/er316_comparison.png)."

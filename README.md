@@ -33,7 +33,7 @@ Transport ramps come from `Weiss-Quantum-Computing/Transport-Optimizer`.
 | phase | content | accepted when it reproduces |
 |---|---|---|
 | P0 | ground state, constants, parameters | magic field, RF splittings and field sensitivities (done, `tests/test_ground_state.py`) |
-| P1 | light field and static potentials | the ER316 calibration files (trap position and ~10 kHz curvature vs rotation); measured full-depth trap frequencies 19 / 16 / 12.5 kHz |
+| P1 | light field and static potentials | the ER316 calibration files (trap position and ~10 kHz curvature vs rotation); measured full-depth trap frequencies 19 / 16 / 12.5 kHz. In progress: x pair done in 1D, ER = 316 confirmed from the theta = 0 split; mid-rotation residuals open (`figures/er316_comparison.png`) |
 | P2 | 1D transport | Transport-Optimizer band P0 and its validator |
 | P3 | single-atom coherence | measured T2*, echo T2, leg-asymmetry phase |
 | P4 | two-atom gate | overlap-vs-voltage table (0.1 overlap at 4340 V, 0.5 at 4785 V); then predicts chi and its budget |
