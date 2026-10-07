@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lattice-sim"
+version = "0.0.1"
+description = "Simulation of the Weiss-group Cs 3D optical lattice: light field, magnetic field, trapping, transport, collisional gates and noise"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "scipy>=1.10", "pyyaml>=6"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+viz = ["matplotlib>=3.7"]
+quantum = ["qutip>=5"]
+gpu = ["jax"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

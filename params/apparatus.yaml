@@ -1,0 +1,85 @@
+# Apparatus parameters for lattice-sim.
+#
+# Source: "Lattice Beams & Magnetic Fields: Parameter Reference" (Lattice Sim
+# project, 7 Oct 2026), which compiles six Weiss-group theses and Maarten's
+# current values. Each entry carries `source`; `status` is one of
+#   current   - stated for the apparatus as it is now
+#   thesis    - taken from a thesis, not re-verified
+#   computed  - derived, not measured
+#   open      - unknown or in conflict; the simulation must treat it as a scan
+# Units are in the key names.
+
+lattice:
+  wavelength_nm: {value: 843.222, status: current}
+  spacing_um:
+    value: {x: 4.837, y: 4.837, z: 4.837}
+    status: computed
+    note: "lambda / (2 sin 5 deg); 10 deg crossing angle is nominal, spacing should be measured per axis"
+  waist_um: {value: 60, status: thesis, source: "Li p.29; Kumar p.14; Wu p.19", note: "unmeasured at the atoms"}
+  polarization: {value: "linear, perpendicular to the plane of each pair", status: thesis, source: "Li p.29-30; Kumar p.62"}
+  layout:
+    value: "X and Z pairs enter from the same side; Y enters from the side 90 deg counterclockwise, viewed from above; z is the vertical imaging axis"
+    status: current
+  trap_frequency_full_depth_kHz: {value: {x: 19.0, y: 16.0, z: 12.5}, status: current}
+  depth_full_MHz:
+    value: {x: 5.6, y: 4.0, z: 2.4}
+    status: computed
+    note: "U = 2 m a^2 f^2"
+  gate_depth_fraction: {value: 0.25, status: thesis, source: "Kumar p.29; Wang p.33", note: "quarter depth = half the trap frequency"}
+  input_extinction_ratio: {value: 1.0e4, status: thesis, source: "Du p.101", note: "lower bound"}
+  scattering_rate_per_s:
+    value: 0.12
+    at: "4 MHz depth, 838.9 nm"
+    status: thesis
+    source: "Kumar p.30"
+    note: "x1.5 per unit depth at 843.222 nm (computed); x17 during motion (Wu p.48)"
+  intensity_lock:
+    value: "PDA100A2 + VCA actuator, 350 kHz bandwidth run at ~180 kHz; residual ~50 Hz table peak"
+    status: thesis
+    source: "Du p.96-100"
+  rin_at_2_omega_trap_per_rtHz: {value: 0.5e-6, status: thesis, source: "Wu p.33"}
+
+polarization_rotator:
+  hardware:
+    value: "one arm per pair: 2 EOMs at 45 deg + quarter-wave plate; phi = pi at V_half_wave"
+    status: thesis
+    source: "Kumar p.60-66; Wu p.47-48; Du p.102 (new EOMs, independent voltages)"
+  v_half_wave_kV: {value: 5.5, status: thesis, note: "Transport-Optimizer uses 5.4 kV full scale"}
+  driver: {value: "Trek 610-series, 20 V/us", status: current}
+  rotating_arm: {value: null, status: open, note: "which arm rotates in each direction"}
+  extinction_ratio_vs_angle:
+    value: null
+    status: open
+    note: "drops below 500 at some angles (Du p.101-102); Maarten is collecting data"
+
+magnetic_field:
+  quantization_field_G: {value: 1.39304, status: computed, note: "Breit-Rabi magic field for |3,-1>-|4,+1>; theses quote 1.393 G"}
+  direction:
+    value: "approx. 45 deg in the lattice x-y plane, along the optical-pumping beam"
+    status: open
+    source: "Du p.76"
+    note: "keep the angle settable; sign relative to the lattice axes unresolved"
+  bias_coils:
+    x: {radius_in: 6.0, separation_in: 6.0, turns: 36, A_per_G: 0.471, status: thesis, source: "Li p.23"}
+    y: {radius_in: 6.0, separation_in: 14.0, turns: 36, A_per_G: 1.222, status: thesis, source: "Li p.23"}
+    z: {radius_in: 4.5, separation_in: 5.125, turns: 36, A_per_G: 0.385, status: thesis, source: "Li p.23"}
+  compensation_coils: {value: "2 turns on X and Y bias coils; none on Z", status: thesis, source: "Du p.77"}
+  lock: {value: "Bartington MAG-13 fluxgate ~4 cm from atoms, loop bandwidth ~1.5 kHz", status: thesis, source: "Du p.76-85"}
+  noise:
+    line_60Hz_unlocked_mG_pp: {value: 1.0, status: thesis, source: "Kumar p.63"}
+    hvac_Hz: {value: [30, 34], status: thesis, source: "Giraldo p.54"}
+    echo_phase_rms_stretched_pi: {value: 0.054, condition: "1/60 s echo, locked", status: thesis, source: "Du p.94"}
+    psd: {value: null, status: open, note: "absolute-unit field spectrum needed"}
+
+states:
+  storage: {value: [[3, -1], [4, 1]], status: current}
+  transport_candidates:
+    value: [[[3, -1], [3, 1]], [[3, -3], [3, 3]]]
+    status: open
+    note: "choice depends on the relative size of the noise sources; the simulation compares both"
+
+calibrations:
+  transport_optimizer_ER316:
+    value: "calibration_{F3,F4}_10kHz_ER316.csv in Transport-Optimizer"
+    status: open
+    note: "10kHz matches the quarter-depth x trap frequency; ER316 most plausibly an extinction ratio of 316 (25 dB). To be confirmed by reproducing the files in Phase 1."
