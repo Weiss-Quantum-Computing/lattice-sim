@@ -71,3 +71,34 @@ The upper bounds follow from the ER lower bounds near π/2. The echo cancels the
 The differential shift per unit ellipticity peaks at π/2 at 1.27 MHz (|3,±3⟩) and 1.45 MHz (|3,±1⟩), so the two pairs are equally exposed to ellipticity changes; |3,±1⟩ has a six times smaller drag term. (`scripts/echo_ellipticity_sensitivity.py`)
 
 **Leg-to-leg ellipticity in this scan.** At the angles where both legs have resolved ER values (|θ − 90°| > 37.5°), the measured differences imply an echo phase of −0.7 ± 0.6 rad (|3,±3⟩) and −0.25 ± 0.22 rad (|3,±1⟩). Both are consistent with zero, but not with 0.1 rad. The crossed-analyzer method measures η², so it cannot reach δη ~ 10⁻⁵ near π/2, where 80–90 % of the sensitivity lies. A signed, linear ellipticity measurement would: a quarter-wave plate plus balanced detection, i.e. Stokes S3. It would also determine the handedness.
+
+## 2026-10-07 — Phase 3: echo sequences and noise (single atom)
+
+**Engine.** A sequence is a list of π pulses, storage holds and transports. Each noise channel enters as a coefficient times the toggling sign (field, intensity, ellipticity, rotation). Random noise is handled with filter functions; the Monte Carlo agrees to 1.5 %. Leg-to-leg changes are deterministic transients tracked per EOM, and the beam envelope makes them site-dependent. Pulse trains are full SU(2) with amplitude and detuning errors. Line-synchronous placement is built in: 60 Hz harmonics cancel by 10⁵ when the transports start whole line periods apart. (`lattice_sim/spin/echo.py`, `pulses.py`, `pair_physics.py`; `tests/test_echo.py`)
+
+**Field-noise calibration.** An assumed lock-on spectrum shape is scaled to reproduce Du's stretched-state echo, 0.054π total of which 0.046π is field noise after removing the atom-number floor. The transport pairs' differential Zeeman sensitivities are 2.11 kHz/mG (|3,±3⟩) and 0.70 kHz/mG (|3,±1⟩).
+
+**Du's |3,±1⟩ contrast loss — acceptance test not passed.**
+
+- White intensity noise at Du's measured −120 dBc/Hz gives contrast ≥ 0.999 in every case, so it cannot explain the loss.
+- Fitting a leg-to-leg change to the complete loss after 2.5 ms parked at π/2 requires either intensity σ = 1.1×10⁻³ or ellipticity σ_η = 5.4×10⁻⁵ (0.14 % of η at ER 625).
+- With the assumed timing (1.5 ms ramps, 1/60 s legs, ER 625), neither mechanism reproduces the angle scan: the model gives 0.99 at 0.45π and 0.95 at 0.65π, against a measured 0.65 and < 0.1.
+
+Du's actual sequence and old-EOM ER(θ) are needed (data request 12).
+
+**Predictions** (x pair, measured ER profile, ramps R3 for |3,±3⟩ and R1 at 8 ms for |3,±1⟩, a single central π pulse below 50 ms separation and an XY-8 train of 9 pulses at 50 ms and above, all defaults in `docs/data_requests.md`). Contrast at 150 ms separation:
+
+| Pair | x only | x-y-z interleaved |
+|---|---|---|
+| |3,±3⟩ | 0.95 | 0.89 |
+| |3,±1⟩ | 0.97 | 0.95 |
+
+The budget is dominated by the assumed map-pulse fidelity and hold scattering. Field noise comes next (2 % for |3,±3⟩ x-y-z). Leg intensity drift at 10⁻⁴ costs 0.3 % (|3,±3⟩) and 0.1 % (|3,±1⟩). White intensity noise, the π train (XY-8) and motional excitation are each ≤ 0.1 %. (`figures/p3_echo.png` b)
+
+**EOM transient and hold length.** The residual echo phase from the transient decays as e^(−separation/τ). For 0.5° rotation and δη = 10⁻⁴ at τ = 50 ms, |φ| < 0.1 rad requires about 90 ms start-to-start for |3,±3⟩ and about 175 ms for |3,±1⟩. The |3,±1⟩ pair is more sensitive because its differential shift changes more steeply with θ. The phase is deterministic, so it can be calibrated out if it is stable; its dephasing through the beam envelope is ≤ 0.3 %. (`figures/p3_echo.png` a)
+
+**π trains.** With 1 % amplitude and detuning errors, XY-8 stays at 1−C ≈ 1×10⁻³ for any input state up to 25 pulses. CP and CPMG reach 4 % at 9 pulses for the worst input state. (`figures/p3_echo.png` c)
+
+**Timing constraint.** Interleaved x-y-z transports do not fit in one line period. The minimum start-to-start separation is 33.3 ms for |3,±3⟩ (block 31.8 ms) and 50 ms for |3,±1⟩ (block 49.8 ms).
+
+**Limits of this phase.** The y and z pairs are x scaled by depth. Map pulses are instantaneous. Motional dephasing is approximated by the product of P0. No collision is modelled (Phase 4).
