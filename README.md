@@ -48,9 +48,27 @@ The comparison is a scan over the noise model, not a fixed assumption.
 status (`current`, `thesis`, `computed`, `open`) for each entry. Open entries
 are scanned rather than assumed.
 
-## Run the tests
+## Install and run (Windows, macOS, Linux)
+
+Python 3.10 or newer.
 
 ```
-pip install -e ".[dev]"
-pytest
+python -m venv .venv
+.venv\Scripts\activate          # Windows (PowerShell: .venv\Scripts\Activate.ps1)
+source .venv/bin/activate        # macOS / Linux
+python -m pip install -e ".[dev,viz]"
+python -m pytest -q
 ```
+
+Scripts are run as `python scripts/<name>.py`; each changes to the
+repository root first, so every path argument is relative to the repo.
+Cached potential tables (`data/*.npz`) are not in git; see `CLAUDE.md` for
+the regeneration order. Transport-Optimizer's calibration files are copied
+in `data/reference/` (override with the `LATTICE_SIM_CALIBRATIONS`
+environment variable).
+
+## Documentation
+
+- `docs/findings.md` — dated log of results, each backed by a test or script.
+- `docs/data_requests.md` — inputs the model needs, ordered by impact.
+- `CLAUDE.md` — layout, conventions and working rules (also for Claude Code).

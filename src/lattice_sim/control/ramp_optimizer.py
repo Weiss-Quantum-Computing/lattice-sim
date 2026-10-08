@@ -166,7 +166,7 @@ def save_ramp(path, problem, a, grid_us=1.25):
     v = V_PI * np.clip(np.interp(t, problem.t, problem.s(a)), 0.0, 1.0)
     v = np.maximum.accumulate(v)
     slew = np.diff(v) / np.diff(t)
-    with open(path, "w") as handle:
+    with open(path, "w", encoding="utf-8", newline="") as handle:
         handle.write("time_us,voltage_V,slew_to_next_V_per_us\n")
         for i in range(t.size):
             nxt = f"{slew[i]:.6f}" if i < slew.size else ""

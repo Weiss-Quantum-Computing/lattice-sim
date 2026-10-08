@@ -38,6 +38,9 @@ def main(er=316.0, n_theta=2881, trap_hz=10e3, out_dir="data", states=None):
 
 
 if __name__ == "__main__":
+    import os as _os
+    from pathlib import Path as _Path
+    _os.chdir(_Path(__file__).resolve().parents[1])  # paths below are relative to the repo root
     er = float(sys.argv[1]) if len(sys.argv) > 1 else 316.0
     n = int(sys.argv[2]) if len(sys.argv) > 2 else 2881
     main(er, n)

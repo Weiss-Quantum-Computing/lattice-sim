@@ -7,6 +7,7 @@ deviation of each. Usage:
 """
 
 import csv
+import os
 import itertools
 import sys
 from pathlib import Path
@@ -21,7 +22,8 @@ STATES = {"F3": (3, -3), "F4": (4, -3)}
 
 
 def load(directory, name):
-    rows = list(csv.DictReader(open(Path(directory) / f"calibration_{name}_10kHz_ER316.csv")))
+    with open(Path(directory) / f"calibration_{name}_10kHz_ER316.csv", encoding="utf-8", newline="") as fh:
+        rows = list(csv.DictReader(fh))
     frac = np.array([float(r["polarization_rotation_over_pi"]) for r in rows])
     x = np.array([float(r["minimum_position_continuous_um"]) for r in rows])
     f = np.array([float(r["trap_frequency_curvature_kHz"]) for r in rows])
@@ -67,4 +69,5 @@ def main(directory):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "../transport-optimizer")
+    os.chdir(Path(__file__).resolve().parents[1])  # run from anywhere
+    main(sys.argv[1] if len(sys.argv) > 1 else "data/reference")

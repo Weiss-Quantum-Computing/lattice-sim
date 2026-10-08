@@ -27,6 +27,7 @@ from ..fields.lattice_pair import LatticePair
 from ..fields.potential import StatePotential
 
 A_LAT = 4.8374e-6
+DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 
 
 def _bottom(model, state, theta):
@@ -79,7 +80,7 @@ class PairPhysics:
         return self._e0(th, 1) + eta * self._s(th, 1)
 
     @classmethod
-    def load_or_compute(cls, m, cache_dir="data", n=91):
+    def load_or_compute(cls, m, cache_dir=DATA_DIR, n=91):
         path = Path(cache_dir) / f"pair_physics_m{m}.npz"
         if path.exists():
             d = np.load(path)

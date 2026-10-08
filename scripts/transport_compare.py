@@ -8,7 +8,9 @@ Usage: python scripts/transport_compare.py RAMP.csv OUT.npz STATE_TAG [STATE_TAG
   STATE_TAG = calF3 | calF4 | <table file stem in data/>
 """
 
+import os
 import sys
+from pathlib import Path
 import time
 
 import numpy as np
@@ -18,7 +20,8 @@ from fit_er316_calibration import load
 from lattice_sim.motion.gaussian_exact import propagate_gaussian
 from lattice_sim.motion.transport1d import PotentialTable, Transport1D, band_mask, load_waveform
 
-OPT_DIR = "/home/claude/transport-optimizer"
+# Transport-Optimizer calibration CSVs (copied into data/reference; override with an env var)
+OPT_DIR = os.environ.get("LATTICE_SIM_CALIBRATIONS", "data/reference")
 
 
 def run(ramp, tag, dt_us=0.25, sample_us=2.5):
@@ -51,4 +54,7 @@ def main(ramp, out, tags):
 
 
 if __name__ == "__main__":
+    import os as _os
+    from pathlib import Path as _Path
+    _os.chdir(_Path(__file__).resolve().parents[1])  # paths below are relative to the repo root
     main(sys.argv[1], sys.argv[2], sys.argv[3:])

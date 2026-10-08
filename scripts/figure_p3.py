@@ -30,7 +30,8 @@ SRC = [("c_maps", "map pulses", "#6b6b6b"), ("c_scatter", "scattering", "#b5872a
 
 
 def main(out):
-    res = json.load(open("data/p3_results.json"))
+    with open("data/p3_results.json", encoding="utf-8") as fh:
+        res = json.load(fh)
     pred = res["predictions"]
     fig, ax = plt.subplots(2, 2, figsize=(7.0, 4.9))
 
@@ -100,4 +101,7 @@ def main(out):
 
 
 if __name__ == "__main__":
+    import os as _os
+    from pathlib import Path as _Path
+    _os.chdir(_Path(__file__).resolve().parents[1])  # paths below are relative to the repo root
     main(sys.argv[1])

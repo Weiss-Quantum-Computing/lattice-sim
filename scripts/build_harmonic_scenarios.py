@@ -42,4 +42,7 @@ def main(pair_name):
 
 
 if __name__ == "__main__":
+    import os as _os
+    from pathlib import Path as _Path
+    _os.chdir(_Path(__file__).resolve().parents[1])  # paths below are relative to the repo root
     main(sys.argv[1])

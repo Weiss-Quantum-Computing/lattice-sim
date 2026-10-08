@@ -170,9 +170,12 @@ def main(er_csv):
               "  ".join(f"{k} {v:.3f}" for k, v in row.items() if k != "fitted_amplitude"))
     profile = ExtinctionProfile.from_rows(read_rampol_er(er_csv), 1, "away")
     pred = predictions(field, profile)
-    with open("data/p3_results.json", "w") as fh:
+    with open("data/p3_results.json", "w", encoding="utf-8") as fh:
         json.dump({"field_scale": k, "du": du, "predictions": pred}, fh, indent=1, default=float)
 
 
 if __name__ == "__main__":
+    import os as _os
+    from pathlib import Path as _Path
+    _os.chdir(_Path(__file__).resolve().parents[1])  # paths below are relative to the repo root
     main(sys.argv[1])
