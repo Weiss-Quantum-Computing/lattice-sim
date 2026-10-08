@@ -28,7 +28,11 @@ def stop_point(scan, target_pi):
     v = np.array(scan["theta"]) / np.pi * V_PI
     phi = np.array(scan["phi"]) / np.pi
     leak = np.array(scan["leak"])
-    k = int(np.argmax(phi >= target_pi))
+    reached = phi >= target_pi
+    if not reached.any() or reached[0]:
+        raise ValueError(f"phase {target_pi:g} pi not crossed inside the scan "
+                         f"(range {phi.min():.2f}-{phi.max():.2f} pi)")
+    k = int(np.argmax(reached))
     f = (target_pi - phi[k - 1]) / (phi[k] - phi[k - 1])
     vs = v[k - 1] + f * (v[k] - v[k - 1])
     slope = np.pi * (phi[k] - phi[k - 1]) / (v[k] - v[k - 1])       # rad / V

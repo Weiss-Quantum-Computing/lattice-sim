@@ -1,6 +1,6 @@
 # Lattice Sim — findings log
 
-Code: local repo `lattice-sim` (to be pushed to Weiss-Quantum-Computing/lattice-sim once the empty repo exists). Every entry below is backed by a test or a script in that repo. This file (`docs/findings.md`) is the source of the copy in the Lattice Sim project.
+Code: `Weiss-Quantum-Computing/lattice-sim`. Every entry below is backed by a test or a script in that repo. This file (`docs/findings.md`) is the source of the copy in the Lattice Sim project.
 
 ## 2026-10-07 — Phase 0–1: ground state and static potentials
 
