@@ -3,8 +3,7 @@
 A first-principles simulation of the Weiss-group Cs 3D optical lattice
 (843.222 nm, blue detuned) for the controlled-collision cluster-state
 experiment. It covers light field, magnetic field, state-dependent
-potentials, transport, spin echoes with noise, and (later) collisional
-gates. Read `README.md` for the phase plan, `docs/findings.md` for what has
+potentials, transport, spin echoes with noise, and collisional gates. Read `README.md` for the phase plan, `docs/findings.md` for what has
 been established, and `docs/data_requests.md` for open inputs.
 
 ## Commands
@@ -19,7 +18,7 @@ Slow scripts (minutes): `build_model_tables.py`, `build_profile_tables.py`,
 `build_harmonic_scenarios.py`, `design_robust_ramp.py`. Their outputs
 (`data/*.npz`) are git-ignored caches; regenerate in this order when needed:
 `build_model_tables.py` → `build_harmonic_scenarios.py pm3|pm1` →
-`build_profile_tables.py` → analysis and figure scripts.
+`build_profile_tables.py` → analysis and figure scripts. Phase 4: `p4_collision.py` (~7 min) → `p4_overlap_check.py`, `p4_summary.py` → `figure_p4.py`.
 `data/pair_physics_m{1,3}.npz` is rebuilt automatically on first use (~30 s).
 
 ## Layout
@@ -29,6 +28,7 @@ Slow scripts (minutes): `build_model_tables.py`, `build_profile_tables.py`,
 - `src/lattice_sim/motion` — split-step 1D transport (`transport1d.py`), exact Gaussian reference (`gaussian_exact.py`), vectorized harmonic scenarios (`fast_gaussian.py`).
 - `src/lattice_sim/control` — robust max-min ramp optimizer.
 - `src/lattice_sim/spin` — pair physics vs θ, echo sequences with filter-function noise and leg transients (`echo.py`), MW pulse trains (`pulses.py`).
+- `src/lattice_sim/gates` — two-atom contact interaction: Gaussian overlap, M = 0 spin space with F-channel projectors, DIS scattering lengths, phase and spin-exchange leakage along a ramp (`collision.py`).
 - `src/lattice_sim/viz/style.py` — the figure style; use `apply()` in new figure scripts.
 - `scripts/` — analyses and figures; `figures/` — committed outputs; `ramps/` — ramps in Transport-Optimizer CSV format for the experiment.
 - `params/apparatus.yaml` — apparatus parameters, each with `source` and `status` (current / thesis / computed / open).

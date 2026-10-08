@@ -25,3 +25,10 @@ values or guesses and are flagged in `scripts/p3_echo_analysis.py`.
 11. **Microwave and RF**: Rabi frequencies, pulse lengths, shot-to-shot amplitude stability, detuning errors, the minimum π-pulse spacing, and whether the pulse phase can be switched (needed for XY-8). *Enters as* `PULSE_EPS`, `PULSE_DET`.
 12. **Du's |3,±1⟩ intensity-noise experiment**: the actual sequence (ramp time, park, leg spacing, depth) and the extinction ratio of the old EOMs against angle (Du Fig. 5.23). Needed to close the failed acceptance test (see findings).
 13. **The y and z pairs**: beam geometry and the extinction-ratio profiles of their rotating arms. They are currently modelled by scaling x with depth.
+
+## D. Collisional gate (Phase 4)
+
+14. **Channel scattering lengths** a_F (F = 0, 2, 4, 6) for f = 3 + f = 3 at the bias field (1.39 G), from a coupled-channel calculation on the Cs potentials (e.g. the Hutson or Julienne groups), or any measured collisional phase for a known overlap. *Enters as* `dis_channel_lengths()` in `gates/collision.py` (the DIS estimate gives a_eff = 1600 a₀ for |3,±3⟩, against the 2800 a₀ used so far). This sets the stop voltage to within 60–150 V.
+15. **Transverse trap frequencies** (y, z) at the x collision. *Enters as* `TRANSVERSE_HZ` in `scripts/p4_collision.py` (default 8.0 / 6.25 kHz). U scales as √(f_y f_z).
+16. **Trek stop-voltage reproducibility** shot to shot, and settling at the stop point. The phase slope is 7–15 mrad/V.
+17. **Collision sequence**: the ramp and stop (or hold) voltage and duration actually used, and the target phase (π/2 for the √ZZ cluster-state gate, or π).

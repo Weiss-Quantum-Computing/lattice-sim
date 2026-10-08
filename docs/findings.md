@@ -102,3 +102,44 @@ The budget is dominated by the assumed map-pulse fidelity and hold scattering. F
 **Timing constraint.** Interleaved x-y-z transports do not fit in one line period. The minimum start-to-start separation is 33.3 ms for |3,±3⟩ (block 31.8 ms) and 50 ms for |3,±1⟩ (block 49.8 ms).
 
 **Limits of this phase.** The y and z pairs are x scaled by depth. Map pulses are instantaneous. Motional dephasing is approximated by the product of P0. No collision is modelled (Phase 4).
+
+## 2026-10-07 — Phase 4: controlled collisions on the x axis
+
+**Model.** The left atom in |3,+m⟩ and the right atom in |3,−m⟩ approach as the rotating arm turns; their separation is d(θ) = a − |x₀(+m)| − |x₀(−m)| from the first-principles potentials with the measured extinction profile. The contact energy is U/h = 2ħ a O / m_Cs, with O the Gaussian density overlap (x from the two tracked trap frequencies; y, z at the assumed `TRANSVERSE_HZ` = 8.0 / 6.25 kHz). The spin space is the seven states |L:μ, R:−μ⟩ (total M = 0), coupled by the scattering-length operator Σ_F a_F P_F; each state carries its Zeeman energy at 1.393 G and the lattice energy of both atoms at the current packet positions (sudden approximation). The phase and the leakage out of |L:+m, R:−m⟩ follow from integrating this 7×7 Hamiltonian along the ramp. (`lattice_sim/gates/collision.py`, `tests/test_collision.py`)
+
+**Acceptance test — passed.** Fed with Transport-Optimizer's ER316 calibration, the overlap engine reproduces `tools/overlap_vs_voltage.py`: relative overlap 0.1 / 0.5 / 0.9 at 4339 / 4785 / 5155 V, against 4340 / 4785 / 5155 V; and U/h = 9.478 kHz at full overlap for 2800 a₀ and 7 kHz transverse, against 9.48 kHz. The Gaussian overlap agrees with quadrature to 10⁻⁶, and with the numerically diagonalized site eigenstates to within 0.9 % at every stop voltage used below. (`scripts/p4_collision.py`, `scripts/p4_overlap_check.py`; `figures/p4_collision.png` f)
+
+**Scattering lengths.** The degenerate-internal-states estimate, using the Cs singlet and triplet lengths a_S = 280.37 a₀ and a_T = 2440 a₀ (Chin et al. 2004), gives a_F = 1495 / 1596 / 1833 / 2204 a₀ for F = 0 / 2 / 4 / 6 in f = 3 + f = 3. The diagonal (effective) length is 1596 a₀ for |3,±3⟩ and 1866 a₀ for |3,±1⟩, 57 % and 67 % of the 2800 a₀ used so far. The operator is not diagonal in m_F, so it couples |L:+m, R:−m⟩ to the other M = 0 pairs. DIS neglects the Feshbach structure of Cs near 1.4 G and is an estimate only; both it and a uniform 2800 a₀ are carried through.
+
+**Energies at the hold voltages** (h = −1; h = +1 differs by < 1 %):
+
+| Pair | V (V) | d (nm) | U/h, 2800 a₀ / DIS (kHz) | smallest gap (kHz) |
+|---|---|---|---|---|
+| |3,±3⟩ | 4340 | 195 | 0.94 / 0.54 | 6.6 |
+| |3,±3⟩ | 4785 | 103 | 4.78 / 2.72 | 1.9 |
+| |3,±3⟩ | 5155 | 40 | 8.63 / 4.92 | 0.08 |
+| |3,±1⟩ | 4340 | 65 | 7.07 / 4.71 | 2.1 |
+| |3,±1⟩ | 4785 | 34 | 8.75 / 5.83 | 0.6 |
+| |3,±1⟩ | 5155 | 13 | 9.45 / 6.30 | 0.04 |
+
+The |3,±1⟩ partners come together about 1000 V earlier in the rotation than the |3,±3⟩ partners (`figures/p4_collision.png` a). The spin-exchange channels are detuned by the differential lattice energy of the exchanged pair, which vanishes as both atoms approach the same site; for θ → π the gaps fall below U, and spin exchange is then limited only by the true a_F differences (panels b, c).
+
+**Gate design: ramp out and back, no hold.** With the robust ramps (R3 for |3,±3⟩, R1 at 8 ms for |3,±1⟩) run out to a stop voltage and straight back, the ramps alone supply the collisional phase:
+
+| Pair | φ | Stop voltage, 2800 a₀ / DIS (V) | dφ/dV (mrad/V) | Leakage, 2800 a₀ / DIS | Round-trip P0 (+m, −m), DIS |
+|---|---|---|---|---|---|
+| |3,±3⟩ | π/2 | 4301 / 4429 | 7.8 / 6.5 | 1.5×10⁻⁶ / 2.8×10⁻⁵ | 0.9947, 0.9995 |
+| |3,±3⟩ | π | 4463 / 4612 | 12.6 / 11.6 | 3.3×10⁻⁵ / 3.7×10⁻⁴ | 0.9940, 0.9998 |
+| |3,±1⟩ | π/2 | 3405 / 3467 | 11.6 / 9.3 | 3.7×10⁻⁵ / 5.1×10⁻⁵ | 0.9994, 0.9911 |
+| |3,±1⟩ | π | 3525 / 3611 | 14.9 / 13.3 | 1.4×10⁻⁴ / 1.7×10⁻⁴ | 0.9984, 0.9983 |
+
+The handedness changes the stop voltages by ≤ 4 V. (`scripts/p4_collision.py`, `scripts/p4_summary.py`; `figures/p4_collision.png` d, e)
+
+Consequences:
+
+- **Phase stability.** A 0.1 rad phase error corresponds to 7–15 V of stop voltage, so the Trek stop point must reproduce to ≲ 1 V for 10 mrad.
+- **Scattering length.** The uncertainty in a_eff (1600–2800 a₀) moves the stop point by 130–150 V for |3,±3⟩ and 60–90 V for |3,±1⟩. The stop point must therefore be calibrated on the atoms; the model fixes only the range.
+- **Leakage** stays ≤ 4×10⁻⁴ at these stop points, because the atoms do not reach the region where the gaps close. Ramps pushed to full overlap would leak about 10⁻² (|3,±3⟩) and 4×10⁻² (|3,±1⟩) under DIS.
+- **Motion.** The |3,±1⟩ stop points (3400–3600 V) lie below the 3800 V stop-anywhere band, and truncating a ramp designed for full transport stops the packets abruptly. The round-trip P0 is 0.991–0.9998 across both pairs and both targets. A dedicated collision ramp (out to the stop voltage with zero end velocity, then back) is needed for P0 > 0.999.
+
+**Limits of this phase.** Only the x pair. The transverse frequencies are assumed. DIS replaces the coupled-channel a_F. The sudden L/R basis fails near full overlap, which the stop points above avoid. Motion and spin are computed separately: P0 from single-atom transport, the phase from the Gaussian overlap.

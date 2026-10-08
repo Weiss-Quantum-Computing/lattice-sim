@@ -36,7 +36,7 @@ Transport ramps come from `Weiss-Quantum-Computing/Transport-Optimizer`.
 | P1 | light field and static potentials | the ER316 calibration files (trap position and ~10 kHz curvature vs rotation); measured full-depth trap frequencies 19 / 16 / 12.5 kHz. In progress: x pair done in 1D, ER = 316 confirmed from the theta = 0 split; mid-rotation residuals open (`figures/er316_comparison.png`) |
 | P2 | 1D transport | Transport-Optimizer band P0 and its validator. Done for the harmonic calibration: split-step and the exact Gaussian solution agree to 1e-6 (`tests/test_transport1d.py`); the optimizer's own propagator is unconverged at its default grid. Model potentials: `figures/transport_p2.png` |
 | P3 | single-atom coherence | measured T2*, echo T2, leg-asymmetry phase. Engine done (`lattice_sim/spin/echo.py`, `figures/p3_echo.png`); field noise calibrated to Du; Du's |3,+/-1> intensity test not yet reproduced; inputs listed in `docs/data_requests.md` |
-| P4 | two-atom gate | overlap-vs-voltage table (0.1 overlap at 4340 V, 0.5 at 4785 V); then predicts chi and its budget |
+| P4 | two-atom gate | overlap-vs-voltage table (0.1 overlap at 4340 V, 0.5 at 4785 V). Done for x (`tests/test_collision.py`): reproduced to 1 V; collisional phase, spin-exchange leakage and stop voltages for both pairs (`figures/p4_collision.png`); channel scattering lengths open |
 | P5 | full sequences | interleaved x/y/z transport with extended hold; error budget by noise source |
 
 A standing question for P1-P3: transport pair |3,-1>/|3,+1> or |3,-3>/|3,+3>.
