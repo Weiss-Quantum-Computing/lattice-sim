@@ -38,6 +38,7 @@ Transport ramps come from `Weiss-Quantum-Computing/Transport-Optimizer`.
 | P3 | single-atom coherence | measured T2*, echo T2, leg-asymmetry phase. Engine done (`lattice_sim/spin/echo.py`, `figures/p3_echo.png`); field noise calibrated to Du; Du's |3,+/-1> intensity test not yet reproduced; inputs listed in `docs/data_requests.md` |
 | P4 | two-atom gate | overlap-vs-voltage table (0.1 overlap at 4340 V, 0.5 at 4785 V). Done for x (`tests/test_collision.py`): reproduced to 1 V; collisional phase, spin-exchange leakage and stop voltages for both pairs (`figures/p4_collision.png`); channel scattering lengths open |
 | P5 | full sequences | interleaved x/y/z transport with extended hold; error budget by noise source |
+| tools | sideband explorer | measured carrier and sideband spectra against alignment settings (open). `scripts/sideband_explorer.py` (interactive), `figures/sidebands_alignment.png`; `scripts/score_suite.py` scores the lab's ILC ramp suites |
 
 A standing question for P1-P3: transport pair |3,-1>/|3,+1> or |3,-3>/|3,+3>.
 The comparison is a scan over the noise model, not a fixed assumption.

@@ -36,6 +36,11 @@ class LatticePair:
     extinction_ratio: object = np.inf  # number, or callable ER(theta)
     handedness: int = 1
     relative_phase: float = np.pi
+    # field amplitude of each arm at the atoms relative to nominal (sqrt of
+    # the local intensity): beam centering and arm imbalance enter here. The
+    # depth calibration of ``fields.potential`` refers to unit amplitudes.
+    static_amplitude: float = 1.0
+    rotating_amplitude: float = 1.0
 
     @property
     def half_angle(self):
@@ -62,8 +67,8 @@ class LatticePair:
         x = np.atleast_1d(np.asarray(x, float))
         e_s, e_r = self.polarizations(theta)
         q = self.k * np.sin(self.half_angle)
-        phase_s = np.exp(1j * q * x)[:, None]
-        phase_r = np.exp(-1j * q * x + 1j * self.relative_phase)[:, None]
+        phase_s = self.static_amplitude * np.exp(1j * q * x)[:, None]
+        phase_r = self.rotating_amplitude * np.exp(-1j * q * x + 1j * self.relative_phase)[:, None]
         return phase_s * e_s + phase_r * e_r
 
     def intensity_and_spin(self, x, theta):
