@@ -91,3 +91,39 @@ def test_centering_offset_lowers_the_trap_frequency():
     f1 = spectrum(off, max_dn=1)["axes"]["x"]["f_lower_hz"]
     # intensity falls by exp(-2 r^2 / w^2) = exp(-0.5), frequency by exp(-0.25)
     assert f1 / f0 == pytest.approx(np.exp(-0.25), rel=2e-3)
+
+
+def test_beam_geometry_nominal_and_tilts():
+    from lattice_sim.spectra.beams import ArmGeometry, PairGeometry, NOMINAL_HALF_ANGLE
+    nominal = PairGeometry(ArmGeometry(), ArmGeometry())
+    spacing, n, frame = nominal.lattice()
+    assert spacing == pytest.approx(4.8374e-6, rel=1e-6)
+    assert np.allclose(n, [1, 0, 0]) and np.allclose(frame, np.eye(3))
+    assert nominal.amplitudes(np.zeros(3)) == pytest.approx([1.0, 1.0])
+    # both arms offset by r: amplitude exp(-r^2/w^2) at the centre, 1 at the beam axis
+    off = PairGeometry(ArmGeometry(offset_pol_m=30e-6), ArmGeometry(offset_pol_m=30e-6))
+    assert off.amplitudes(np.zeros(3)) == pytest.approx([np.exp(-0.25)] * 2)
+    assert off.amplitudes(np.array([0, 0, 30e-6])) == pytest.approx([1.0, 1.0])
+    # differential in-plane tilt changes the half angle and the spacing
+    d = 1e-3
+    cross = PairGeometry(ArmGeometry(tilt_inplane_rad=d), ArmGeometry(tilt_inplane_rad=-d))
+    assert cross.lattice()[0] == pytest.approx(843.222e-9 / (2 * np.sin(NOMINAL_HALF_ANGLE + d)), rel=1e-9)
+    # differential vertical tilt rotates the fringe normal by ~ d / sin(alpha)
+    vert = PairGeometry(ArmGeometry(tilt_vertical_rad=d), ArmGeometry(tilt_vertical_rad=-d))
+    _, n_v, _ = vert.lattice()
+    assert np.arctan2(n_v[2], n_v[0]) == pytest.approx(d / np.sin(NOMINAL_HALF_ANGLE), rel=1e-3)
+    # a common tilt leaves spacing and normal unchanged; a pivot moves the beams
+    common = PairGeometry(ArmGeometry(tilt_vertical_rad=d, pivot_m=0.3), ArmGeometry(tilt_vertical_rad=d, pivot_m=0.3))
+    assert common.lattice()[0] == pytest.approx(spacing, rel=1e-6)
+    assert np.allclose(common.lattice()[1], n, atol=1e-9)
+    assert common.amplitudes(np.array([0, 0, 0.3 * d])) == pytest.approx([1.0, 1.0], abs=1e-9)
+
+
+def test_crossing_angle_scales_the_trap_frequency_at_fixed_depth():
+    site = nominal_site(rotation_fraction=0.0, extinction_ratio=np.inf)
+    a0 = site.axes[0].spacing_m
+    half = np.rad2deg(np.arcsin(843.222e-9 / (2 * a0)))
+    f0 = spectrum(site, max_dn=1)["axes"]["x"]["f_lower_hz"]
+    f1 = spectrum(with_alignment(site, "x", crossing_half_angle_deg=half + 0.1), max_dn=1)["axes"]["x"]["f_lower_hz"]
+    a1 = 843.222e-9 / (2 * np.sin(np.deg2rad(half + 0.1)))
+    assert f1 / f0 == pytest.approx(a0 / a1, rel=2e-3)

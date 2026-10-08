@@ -25,6 +25,7 @@ from dataclasses import replace
 
 import numpy as np
 
+from lattice_sim.spectra.beams import ArmGeometry, PairGeometry, gradients
 from lattice_sim.spectra.sidebands import (AxisConfig, SiteConfig, amplitude_from_offset, collapse_lines,
                                            line_shape, nominal_site, spacing_from_crossing, spectrum)
 
@@ -38,6 +39,7 @@ class Explorer:
         self.nominal = nominal_site()
         self.ref = spectrum(self.nominal, max_dn=1)
         self.axis = "x"
+        self.offset_dir = "pol"          # arm offsets along the polarization (imaging) axis or the fringes
         self.state = {ax: dict(static_um=0.0, rotating_um=0.0, dalpha_deg=0.0, depth=1.0, rotation_pct=3.0,
                                log_er=np.log10(3e4), handedness=-1)
                       for ax in "xyz"}
@@ -47,10 +49,12 @@ class Explorer:
         axes = []
         for cfg in self.nominal.axes:
             s = self.state[cfg.axis]
+            spacing = spacing_from_crossing(np.deg2rad(NOMINAL_HALF_ANGLE_DEG + s["dalpha_deg"]))
             axes.append(replace(
                 cfg,
-                trap_frequency_hz=cfg.trap_frequency_hz * np.sqrt(s["depth"]),
-                spacing_m=spacing_from_crossing(np.deg2rad(NOMINAL_HALF_ANGLE_DEG + s["dalpha_deg"])),
+                # the crossing angle changes the spacing at fixed intensity: f ~ 1 / spacing
+                trap_frequency_hz=cfg.trap_frequency_hz * np.sqrt(s["depth"]) * cfg.spacing_m / spacing,
+                spacing_m=spacing,
                 theta=s["rotation_pct"] / 100 * np.pi,
                 extinction_ratio=10 ** s["log_er"], handedness=int(s["handedness"]),
                 static_amplitude=amplitude_from_offset(s["static_um"] * 1e-6, WAIST_M),
@@ -58,6 +62,21 @@ class Explorer:
         phi = np.deg2rad(self.glob["b_angle_deg"])
         b = self.glob["b_gauss"] * np.array([np.cos(phi), np.sin(phi), 0.0])
         return SiteConfig(axes, b, self.glob["temperature_uk"] * 1e-6)
+
+    def gradients(self):
+        """Carrier and f gradients across the lattice from the edited pair's
+        arm offsets (taken along the chosen direction), Hz per um."""
+        s = self.state[self.axis]
+        if s["static_um"] == 0 and s["rotating_um"] == 0:
+            return None
+        key = "offset_fringe_m" if self.offset_dir == "fringe" else "offset_pol_m"
+        geom = PairGeometry(ArmGeometry(**{key: s["static_um"] * 1e-6}),
+                            ArmGeometry(**{key: s["rotating_um"] * 1e-6}))
+        site = self.site()
+        base = [replace(cfg, static_amplitude=1.0, rotating_amplitude=1.0) if cfg.axis == self.axis else cfg
+                for cfg in site.axes]
+        g = gradients(replace(site, axes=base, grid_points=801), self.axis, geom)
+        return {k: v * 1e-6 for k, v in g.items() if k != "centre"}
 
     def table(self, sp):
         rows = [f"carrier shift {sp['carrier_shift_hz']:+8.1f} Hz  (nominal {self.ref['carrier_shift_hz']:+.1f})"]
@@ -68,6 +87,15 @@ class Explorer:
             r_minus = lines.get((ax, -1), (0, 0))[1] / sp["carrier_weight"]
             rows.append(f"{ax}: f(3,-3) {a['f_lower_hz']/1e3:6.2f} kHz  f(4,-4) {a['f_upper_hz']/1e3:6.2f} kHz  "
                         f"dx {a['displacement_m']*1e9:+6.1f} nm  SB/carrier +1 {r_plus:.3f}  -1 {r_minus:.3f}")
+        g = self.gradients()
+        if g is not None:
+            rows.append(f"gradients across the lattice from the {self.axis}-pair arm offsets (along the "
+                        f"{'fringe' if self.offset_dir == 'fringe' else 'polarization'} direction):")
+            rows.append(f"   carrier  {g['carrier_hz_per_m_fringe']:+7.2f} Hz/um along fringes, "
+                        f"{g['carrier_hz_per_m_pol']:+7.2f} Hz/um along polarization")
+            rows.append(f"   f(3,-3)  {g['f_lower_hz_per_m_fringe']:+7.2f} Hz/um along fringes, "
+                        f"{g['f_lower_hz_per_m_pol']:+7.2f} Hz/um along polarization   "
+                        f"(a 0.1 G/cm field gradient: -24.5 Hz/um on the carrier only)")
         return "\n".join(rows)
 
 
@@ -107,6 +135,8 @@ def run_interactive():
 
     ax_radio = fig.add_axes([x0, y - 0.06, 0.08, 0.08])
     radio = RadioButtons(ax_radio, ("x", "y", "z"), active=0)
+    ax_dir = fig.add_axes([x0 + 0.17, y - 0.06, 0.09, 0.08])
+    radio_dir = RadioButtons(ax_dir, ("offsets along pol.", "offsets along fringes"), active=0)
     fig.text(x0 + 0.09, y - 0.01, "pair edited by the\nsliders below", fontsize=8, va="top")
     y -= 0.10
     add("static_um", "static arm offset (um)", 0, 40, 0, "%.1f")
@@ -150,6 +180,12 @@ def run_interactive():
     for s in sliders.values():
         s.on_changed(refresh)
     radio.on_clicked(choose_axis)
+
+    def choose_direction(label):
+        ex.offset_dir = "fringe" if "fringe" in label else "pol"
+        refresh()
+
+    radio_dir.on_clicked(choose_direction)
     fig.suptitle("Lattice alignment and the |4,-4> -> |3,-3> sideband spectrum (1D per pair; see module docstring)")
     plt.show()
 

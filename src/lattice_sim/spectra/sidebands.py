@@ -112,6 +112,11 @@ class AxisConfig:
     rotation_sense: int = 1
     static_amplitude: float = 1.0          # local field amplitude of each arm
     rotating_amplitude: float = 1.0
+    frame: object = None                   # 3x3 lab -> pair frame; None = PAIR_FRAMES[axis]
+
+    def b_local(self, b_lab_gauss):
+        frame = PAIR_FRAMES[self.axis] if self.frame is None else np.asarray(self.frame, float)
+        return frame @ np.asarray(b_lab_gauss, float)
 
     def pair(self):
         return LatticePair(spacing_m=self.spacing_m, rotation_sense=self.rotation_sense,
@@ -135,8 +140,7 @@ def axis_levels(cfg: AxisConfig, b_lab_gauss, n_levels=4, grid_points=1201, half
                 states=(UPPER, LOWER)):
     """Vibrational energies (Hz, including the state's light shift) and
     wavefunctions of each state along one axis, on a common grid."""
-    model = StatePotential(cfg.pair(), b_in_pair_frame(cfg.axis, b_lab_gauss),
-                           trap_frequency_hz=cfg.trap_frequency_hz)
+    model = StatePotential(cfg.pair(), cfg.b_local(b_lab_gauss), trap_frequency_hz=cfg.trap_frequency_hz)
     x = np.linspace(-half_width_m, half_width_m, grid_points)
     out = {}
     for state in states:
@@ -240,14 +244,18 @@ def nominal_site(trap_hz=(19e3, 16e3, 12.5e3), rotation_fraction=0.03, extinctio
 def with_alignment(site: SiteConfig, axis, static_offset_m=0.0, rotating_offset_m=0.0,
                    crossing_half_angle_deg=None, waist_m=60e-6, **axis_fields):
     """Copy of ``site`` with one pair's centering, crossing angle and any
-    AxisConfig field changed."""
+    AxisConfig field changed. The crossing angle changes the spacing at
+    fixed intensity, so the trap frequency scales as 1 / spacing
+    (``trap_frequency_hz`` refers to the depth at the nominal spacing)."""
     axes = []
     for cfg in site.axes:
         if cfg.axis == axis:
             changes = dict(static_amplitude=amplitude_from_offset(static_offset_m, waist_m),
                            rotating_amplitude=amplitude_from_offset(rotating_offset_m, waist_m))
             if crossing_half_angle_deg is not None:
-                changes["spacing_m"] = spacing_from_crossing(np.deg2rad(crossing_half_angle_deg))
+                spacing = spacing_from_crossing(np.deg2rad(crossing_half_angle_deg))
+                changes["spacing_m"] = spacing
+                changes["trap_frequency_hz"] = cfg.trap_frequency_hz * cfg.spacing_m / spacing
             changes.update(axis_fields)
             cfg = replace(cfg, **changes)
         axes.append(cfg)
