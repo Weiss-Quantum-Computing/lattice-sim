@@ -32,3 +32,8 @@ values or guesses and are flagged in `scripts/p3_echo_analysis.py`.
 15. **Transverse trap frequencies** (y, z) at the x collision. *Enters as* `TRANSVERSE_HZ` in `scripts/p4_collision.py` (default 8.0 / 6.25 kHz). U scales as √(f_y f_z).
 16. **Trek stop-voltage reproducibility** shot to shot, and settling at the stop point. The phase slope is 7–15 mrad/V.
 17. **Collision sequence**: the ramp and stop (or hold) voltage and duration actually used, and the target phase (π/2 for the √ZZ cluster-state gate, or π).
+
+## E. Alignment and sidebands
+
+18. **Measured |4,−4⟩ → |3,−3⟩ spectra** (carrier and sidebands) for a few deliberate alignment changes: a known beam-centering offset, a crossing-angle change, the EOM rotation used for the sideband scan, and the lattice depth; with the measured temperature or n̄. *Enters as* the defaults of `scripts/sideband_explorer.py` (`nominal_site`) and validates the 1D-per-pair sideband model (`figures/sidebands_alignment.png`).
+19. **x₀(θ) or f(θ) of |3,−3⟩ at θ ≈ 0.4π and 0.6π.** Decides between the calibration and the first-principles shape of the transport path, which changes the predicted excitation of ramps faster than 3 ms by 10–100× (`figures/model_vs_calibration.png`, `scripts/score_suite.py`).
