@@ -64,10 +64,15 @@ class PairPhysics:
         self._s = CubicSpline(self.thetas, self.s_hz)
         b0 = magic_field()
         self.kappa_b_hz_per_mg = field_sensitivity((3, self.m), (3, -self.m), b0) / 1e3
-        # storage qubit differential light shift at the trap bottom: the
-        # zero-point energy (h f / 2 per axis, three axes) times the
-        # hyperfine differential ratio of the scalar polarizability
-        self.storage_ls_hz = abs(differential_scalar_ratio(LATTICE_WAVELENGTH_M)) * 1.5 * self.trap_hz
+        # storage qubit differential light shift in the vibrational ground
+        # state: the light shift follows the mean potential energy <V>, which
+        # is h f / 4 per axis for a harmonic ground state (half the zero-point
+        # energy; per vibrational level it rises by h f / 2, as in the Wu
+        # test), times the hyperfine differential ratio of the scalar
+        # polarizability. The three axes are x and the y, z approximations
+        # of ``echo.AXIS_SCALE`` (depth ~ f^2).
+        f_axes = self.trap_hz * np.array([1.0, 8.0 / 9.5, 6.25 / 9.5])
+        self.storage_ls_hz = abs(differential_scalar_ratio(LATTICE_WAVELENGTH_M)) * np.sum(f_axes) / 4
 
     def de0(self, theta):
         return self._e0(np.clip(theta, 0, np.pi))

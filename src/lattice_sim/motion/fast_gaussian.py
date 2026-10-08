@@ -72,7 +72,8 @@ class HarmonicScenario:
     @classmethod
     def load(cls, path, f_scale=1.0):
         d = np.load(path)
-        name = str(path).split("/")[-1].removesuffix(".npz")
+        from pathlib import Path
+        name = Path(path).stem
         if f_scale != 1.0:
             name += f"_f{f_scale:g}"
         return cls(d["theta"], d["x0_m"], d["f_hz"], name, f_scale)

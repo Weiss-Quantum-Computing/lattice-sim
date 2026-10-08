@@ -56,9 +56,14 @@ def leg_trajectory(rows, leg, dt_s=1e-6):
 
 
 def _sigma(rows, leg, direction, theta, er):
-    """1-sigma of a dip ER point (mean of the asymmetric bars); lower bounds get 0."""
+    """1-sigma of a dip ER point (mean of the asymmetric bars); lower bounds get 0.
+
+    The point is matched by leg, direction (the static rest/hold points that
+    anchor a profile count for either direction), angle and ER value."""
     for r in rows:
-        if (r["method"] == "dip" and int(r["leg"]) == leg and abs(np.deg2rad(abs(r["rotation_deg"])) - theta) < 0.02
+        if (r["method"] == "dip" and int(r["leg"]) == leg
+                and r["direction"] in (direction, "static")
+                and abs(np.deg2rad(abs(r["rotation_deg"])) - theta) < 0.02
                 and abs(r["er"] - er) < 1e-6 * er):
             if r["lower_bound"] == 1 or np.isnan(r["er_sigma_lo"]):
                 return 0.0

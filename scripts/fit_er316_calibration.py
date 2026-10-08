@@ -51,7 +51,9 @@ def main(directory):
     grid = dict(
         handedness=[1, -1],
         rotation_sense=[1, -1],
-        b_angle_deg=[45, 135, -45, -135],
+        # 0 and 90 deg are in the grid so the findings' claim that they are
+        # excluded (rms 2.3 um / 90 nm against 27 nm at 45 deg) is reproducible
+        b_angle_deg=[0, 45, 90, 135, -45, -135],
         hyperfine_scalar=[True, False],
     )
     results = []

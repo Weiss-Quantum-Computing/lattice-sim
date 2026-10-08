@@ -8,7 +8,7 @@ import pytest
 from scipy.interpolate import CubicSpline
 
 from lattice_sim.constants import A0
-from lattice_sim.gates.collision import (MU, CollisionModel, channel_projectors, dis_channel_lengths,
+from lattice_sim.gates.collision import (MU, CollisionModel, channel_projectors, collision_ramp, dis_channel_lengths,
                                          interaction_hz, overlap_density, oscillator_width,
                                          scattering_operator, uniform_lengths)
 
@@ -80,3 +80,29 @@ def test_phase_equals_integrated_energy_when_gaps_are_large():
     expected = 2 * np.pi * interaction_hz(1.0, cm.overlap(np.pi)) * np.real(op[cm.index, cm.index]) * 300e-6
     assert phi == pytest.approx(expected, rel=1e-3)
     assert pops[cm.index] == pytest.approx(1.0, abs=1e-6)
+
+
+def test_collision_ramp_times_are_strictly_increasing():
+    t = np.linspace(0, 100, 81)
+    theta = np.pi * t / t[-1]
+    for hold in (0.0, 50.0):
+        tr, thr = collision_ramp(t, theta, 0.6 * np.pi, hold)
+        assert np.all(np.diff(tr) > 0), f"hold {hold}: duplicated time points"
+        assert tr.size == thr.size
+        assert thr.max() == pytest.approx(0.6 * np.pi)
+        assert tr[-1] == pytest.approx(2 * t[np.searchsorted(theta, 0.6 * np.pi)] + hold)
+
+
+def test_evolve_integrates_the_whole_span():
+    # a span that is not a multiple of dt_us must not lose its last fraction
+    th = np.linspace(0, np.pi, 50)
+    lat = np.full((th.size, 7), 1e9)
+    lat[:, list(MU).index(3)] = 0.0
+    cm = CollisionModel(3, th, 1.2e-6 * th / np.pi * 2, 1.2e-6 * th / np.pi * 2,
+                        np.full(th.size, 5e3), np.full(th.size, 5e3), lat)
+    op = scattering_operator(uniform_lengths(2800.0))
+    u_hz = interaction_hz(1.0, cm.overlap(np.pi)) * np.real(op[cm.index, cm.index])
+    for span in (300.0, 300.7):
+        phi, _ = cm.evolve(np.array([0.0, span]), np.array([np.pi, np.pi]), op, dt_us=1.0)
+        # 1e-5 of second-order shift from the far channels; the old code lost 2.3e-3 at 300.7
+        assert phi == pytest.approx(2 * np.pi * u_hz * span * 1e-6, rel=1e-4)

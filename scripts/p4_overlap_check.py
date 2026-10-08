@@ -8,6 +8,7 @@ of the same model. Prints O_x(Gaussian) / O_x(numerical).
 import json
 
 import numpy as np
+from scipy.integrate import trapezoid
 
 from lattice_sim.gates.collision import oscillator_width
 from lattice_sim.motion.transport1d import PotentialTable, Transport1D, harmonic_parameters
@@ -31,7 +32,7 @@ def main():
             x = np.linspace(-1e-6, A + 1e-6, 40001)
             nl = np.interp(x, tl.x, np.abs(psi_l) ** 2 / (tl.x[1] - tl.x[0]), left=0, right=0)
             nr = np.interp(x - A, tr.x, np.abs(psi_r) ** 2 / (tr.x[1] - tr.x[0]), left=0, right=0)
-            numeric = np.trapezoid(nl * nr, x)
+            numeric = trapezoid(nl * nr, x)   # np.trapezoid needs NumPy >= 2
             k = int(np.argmin(np.abs(tl.thetas - th)))
             d = A - abs(cl[k]) - abs(cr[k])
             s2 = oscillator_width(fl[k]) ** 2 + oscillator_width(fr[k]) ** 2

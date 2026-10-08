@@ -52,3 +52,13 @@ def test_fast_gaussian_matches_adaptive_solver():
                                  sample_every=40)[0]
     _, p_exact, _ = propagate_gaussian(t, theta, centre, frequency, sample_times_us=tg[::40])
     assert np.max(np.abs(p_fast - p_exact)) < 2e-6
+
+
+def test_harmonic_scenario_name_is_the_file_stem(tmp_path):
+    from lattice_sim.motion.fast_gaussian import HarmonicScenario
+
+    path = tmp_path / "harm_F3m-3_ER316_h-1.npz"
+    th = np.linspace(0, np.pi, 11)
+    np.savez(path, theta=th, x0_m=-2.4e-6 * th / np.pi, f_hz=np.full(th.size, 1e4))
+    assert HarmonicScenario.load(path).name == "harm_F3m-3_ER316_h-1"
+    assert HarmonicScenario.load(str(path), 1.05).name == "harm_F3m-3_ER316_h-1_f1.05"

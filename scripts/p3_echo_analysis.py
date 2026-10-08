@@ -45,7 +45,6 @@ HOLD_AT_PI_US = 600.0
 
 
 def calibrate_field():
-    pair = type("P", (), {})()
     seq = Sequence([("wait", 1e6 / 60), ("pi",), ("wait", 1e6 / 60)], dt_us=10)
     g = seq.build()
     c = np.full(g.t_us.size, KAPPA_STRETCHED)

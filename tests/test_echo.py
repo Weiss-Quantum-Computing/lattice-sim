@@ -71,3 +71,16 @@ def test_transient_is_per_axis():
 def test_xy8_is_robust_and_cp_is_not():
     assert worst_input_contrast("XY-8", 9, eps_sigma=0.02, n_shots=60) > 0.995
     assert train_contrast("CP (pi_x)", 9, eps_sigma=0.02, n_shots=60) < 0.95
+
+
+def test_rotation_coefficient_scales_with_intensity_like_static():
+    # drag term ~ intensity^2, ellipticity term ~ intensity: on the y axis
+    # (depth scale < 1) the rotation channel must use the same powers as "static"
+    g = symmetric_echo(axes=("y",)).build()
+    pair, eta = FlatPair(), 1e-3
+    c = coefficients(g, pair, lambda th: eta + 0 * th, a=0.8)
+    sc = g.axis_scale * 0.8
+    th = np.where(g.in_transport, g.theta, 0.0)
+    expected = np.where(g.in_transport,
+                        pair.ddtheta(th, 0.0) * sc**2 + eta * (-4e6 * np.sin(th) ** 3 * np.cos(th)) * sc, 0.0)
+    assert np.allclose(c["rotation"], expected)

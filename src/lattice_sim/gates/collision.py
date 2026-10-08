@@ -196,7 +196,12 @@ class CollisionModel:
         The phase is that of the initial-state amplitude relative to the
         evolution without interaction, unwrapped step by step (it can exceed pi).
         """
-        t = np.arange(t_us[0], t_us[-1], dt_us) + dt_us / 2
+        # Uniform steps covering the whole span: the nominal dt_us is shrunk so
+        # that no fractional step at the end is dropped.
+        span = float(t_us[-1] - t_us[0])
+        n_steps = max(1, int(np.ceil(span / dt_us - 1e-9)))
+        dt_us = span / n_steps
+        t = t_us[0] + dt_us * (np.arange(n_steps) + 0.5)
         th = np.interp(t, t_us, theta_t)
         psi = np.zeros(7, complex)
         psi[self.index] = 1.0
@@ -226,8 +231,10 @@ def collision_ramp(t_us, theta, theta_hold, hold_us):
     tr = tu[-1]
     t = np.concatenate([tu, tr + hold_us + (tr - tu[::-1])[1:]])
     th = np.concatenate([thu, thu[::-1][1:]])
-    t = np.concatenate([t[: stop + 1], [tr + hold_us], t[stop + 1:]])
-    th = np.concatenate([th[: stop + 1], [theta_hold], th[stop + 1:]])
+    if hold_us > 0:
+        # end of the hold; with no hold this point would duplicate t = tr
+        t = np.concatenate([t[: stop + 1], [tr + hold_us], t[stop + 1:]])
+        th = np.concatenate([th[: stop + 1], [theta_hold], th[stop + 1:]])
     return t, th
 
 

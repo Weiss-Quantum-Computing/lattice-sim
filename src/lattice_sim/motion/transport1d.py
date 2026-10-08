@@ -161,7 +161,8 @@ class Transport1D:
 
 
 def load_waveform(path, v_full_scale=5400.0):
-    """Read a Transport-Optimizer ramp; return t (us) and theta (rad)."""
+    """Read a Transport-Optimizer ramp; return t (us), theta (rad) and the
+    voltage (V). The voltage is made monotonic (running maximum)."""
     data = np.genfromtxt(path, delimiter=",", names=True)
     t = np.asarray(data["time_us"], float)
     v = np.maximum.accumulate(np.asarray(data["voltage_V"], float))
