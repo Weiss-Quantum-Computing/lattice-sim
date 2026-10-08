@@ -1,0 +1,73 @@
+# Lattice Sim — findings log
+
+Code: local repo `lattice-sim` (to be pushed to Weiss-Quantum-Computing/lattice-sim once the empty repo exists). Every entry below is backed by a test or a script in that repo. This file (`docs/findings.md`) is the source of the copy in the Lattice Sim project.
+
+## 2026-10-07 — Phase 0–1: ground state and static potentials
+
+**Magic field.** |3,−1⟩↔|4,+1⟩ is first-order field-insensitive at 1.39304 G. Breit–Rabi and full 16×16 diagonalization agree, as does the lowest-order closed form. The parameter reference's 1.3924 G is 0.6 mG low; the theses' 1.393 G is correct. The qubit frequency differs by < 1 mHz between the two values. (`tests/test_ground_state.py`)
+
+**ER316 = rotating-arm extinction ratio 316:1 (25 dB).** The Transport-Optimizer calibration files `calibration_{F3,F4}_10kHz_ER316.csv` were generated with a 10 kHz trap (θ = 0, pure lattice) and a rotating arm of extinction ratio 316. Evidence: the first-principles x-pair model gives a θ = 0 trap-frequency split f(4,−3) − f(3,−3) of 101.2 Hz at ER = 316, against 101.1 Hz in the files. ER = 250 and 400 give 113.8 and 90.0 Hz. The split is zero for pure linear polarization. (`tests/test_lattice_potential.py`)
+
+**Model vs calibration across the rotation.** The trap positions agree to within a few nm for θ < 0.35π and θ > 0.65π; the displacement of a/2 = 2.419 µm at θ = π is reproduced exactly. Near θ = π/2 the curves differ by up to 0.13 µm in position and 0.75 kHz in trap frequency. At θ = π/2 the model gives 3.1 kHz for |3,−3⟩ where the files give 3.8 kHz. Candidate explanations: a different treatment of the fictitious-field projection, or of the ellipticity axis, in whatever generated the files. Du's first-order projection (Eq. 3.8) fits worse than the exact diagonalization (44 nm vs 27 nm rms). The generating script would settle this, as would a measured trap frequency near π/2 (sideband spectroscopy). (`figures/er316_comparison.png`, `scripts/fit_er316_calibration.py`)
+
+**Best-fit geometry for the files.** Quantization field at 45° in the x–y plane (rms error rises steeply away from 45–50°; 0° and 90° are excluded). One ellipticity handedness fits markedly better than the other (27 nm vs 91 nm rms).
+
+**Differential light shift.** The F=4/F=3 scalar differential is −0.226 % of the depth at 843.222 nm, i.e. 10.8 Hz per vibrational level at 9.5 kHz and 21.5 Hz at 19 kHz. The same code gives 29.9 Hz per level at 847 nm and 15 kHz, reproducing Wu (2020, p. 25: 28–30 Hz).
+
+**Vector-to-scalar ratio** at 843.222 nm: 0.374 (from D1/D2 line strengths with counter-rotating terms).
+
+**Rotating arms (current setup, beams drawn as /\\):** x right, y left, z top.
+
+## 2026-10-07 — Phase 2: 1D transport (x pair, 10 kHz, ER 316)
+
+**Engines.** A split-step Fourier propagator on tabulated potentials, and an exact Gaussian (Heller) solution for harmonic traps. On the Transport-Optimizer seed ramp with the calibration potentials they agree to 1×10⁻⁶ in P0; refining the time step (0.25 → 0.1 µs) and the grid (1024 → 2048 points) changes nothing at that level. (`tests/test_transport1d.py`)
+
+**The optimizer's propagator is not converged at its default grid.** Exact band-minimum P0 on the seed ramp: F3 0.99950, F4 0.99884. The optimizer's node method gives F3 0.99871 / 0.99929 / 0.99942 at N_X = 5001 / 10001 / 20001, converging towards the exact value. At the default N_X = 10001 the error, 2×10⁻⁴, exceeds the 8×10⁻⁵ improvement reported for K06 over the seed. The exact engine confirms that K06 does improve the band P0, by 0.8×10⁻⁴ for F3 and 1.2×10⁻⁴ for F4.
+
+**On the model potentials, K06 leaves |3,−3⟩ 1 % excited.** Band-minimum P0 is 0.9877 (final 0.9911), against 0.99958 on the calibration. |3,+3⟩ gives 0.99880 and |4,−3⟩ 0.99880. Replacing the model by its own harmonic approximation gives 0.9893. The loss therefore comes from the harmonic parameters, not from anharmonicity: the model's trap frequency at π/2 is 3.06 kHz, against 3.81 kHz in the calibration. The ramp relies on cancelling mid-path excitation in its second half, which makes it sensitive to the π/2 trap frequency. A measured trap frequency near π/2 is the most valuable single calibration input. (`figures/transport_p2.png` b)
+
+**Extinction ratio and the |3,±1⟩ pair.** Ellipticity in the rotating arm produces a scalar lattice in quadrature with the original one. Near θ = π/2 its wells coincide with the transport sites, so it deepens one partner's trap and shallows the other's. At θ = π/2 the trap depths are:
+
+- ER = ∞: 279 kHz for |3,±3⟩ and 93 kHz for |3,±1⟩.
+- ER = 316: 364 / 188 kHz for |3,±3⟩ and 180 / 5.9 kHz for |3,±1⟩.
+
+At ER = 316 the shallow |3,±1⟩ partner is essentially untrapped along x. Propagated through K06 it ends with P0 < 10⁻⁴, spread over both neighbouring sites. The shallow ±1 partner recovers half its ideal depth at ER ≈ 1.3×10³ and 80 % at ER ≈ 10⁴. Which partner is shallow depends on the ellipticity handedness. This may contribute to Du's observed loss of |3,±1⟩ contrast near and beyond π/2 (Du p. 102–103), which was attributed to intensity noise. (`scripts/depth_vs_extinction.py`, `figures/transport_p2.png` d)
+
+**|3,±1⟩ needs its own ramp.** Its displacement is concentrated in a narrower window around π/2 than that of |3,±3⟩ (`figures/transport_p2.png` c). Even at ER = ∞, K06 leaves the shallow ±1 partner with final P0 = 0.43; at ER = 10⁴, 3×10³ and 10³ the values are 0.12, 0.015 and 2×10⁻⁵. K06 was designed on the |m_F| = 3 calibration and is not suited to |m_F| = 1.
+
+## 2026-10-07 — Sign convention and robust ramps
+
+**Transport direction (measured).** On x, |4,−4⟩ moves toward the EO arm (the arm closest to the optical-pumping beam) and |3,−3⟩ moves away from it. This matches the model with the EO-arm side as +x, and matches the sign convention of the ER316 calibration files. The observation fixes the product of rotation sense and quantization-field sign, which is all the motion depends on, so the unknown field polarity does not matter for transport.
+
+**Remaining unknown: the handedness of the ellipticity.** It decides which partner of each pair is deepened at π/2. The trap-frequency ratio f(|4,−4⟩)/f(|3,−3⟩) with the lattice parked at θ = π/2 discriminates it: 1.86 (h = −1) or 1.01 (h = +1) at ER = 316, against 1.33 for pure linear polarization. The ratio is independent of the absolute depth calibration. (`figures/robust_ramps.png` d)
+
+**Robust ramp R3 for |3,±3⟩ (5 ms).** It maximizes the worst stop-anywhere P0 over 14 harmonic scenarios: both states, ER ∈ {316, 10³, ∞}, both handedness values, and ±5 % trap-frequency error. The worst case is 1 − P0 = 1.6×10⁻³. K06 over the same scenarios gives 1.4×10⁻²; it is better (4–9×10⁻⁴) everywhere except |3,−3⟩ at ER 316, h = −1. Validation on the full anharmonic potentials at ER 316, h = −1: |3,−3⟩ 0.99898, |3,+3⟩ 0.99854. On the original calibration curves R3 gives 0.99901. (`ramps/R3_5ms_robust.csv`, Transport-Optimizer CSV format)
+
+**Robust ramp R1 for |3,±1⟩ (ER ≥ 10⁴).** The worst case over 14 scenarios is 1.9×10⁻³ at 5 ms and 6.6×10⁻⁴ at 8 ms. On the full potentials at ER 10⁴, h = −1: 0.99898 / 0.99889 at 5 ms and 0.99969 / 0.99939 at 8 ms. R1 dwells near θ ≈ 0.5π, where the |m_F| = 1 displacement is concentrated (`figures/robust_ramps.png` a).
+
+**Engine.** A vectorized exact-Gaussian propagator with piecewise-exact steps agrees with the adaptive ODE solver to 5×10⁻⁷ and scores a 5 ms ramp in 0.3 s for any number of scenarios. (`lattice_sim/motion/fast_gaussian.py`, `lattice_sim/control/ramp_optimizer.py`)
+
+## 2026-10-07 — Measured extinction ratio (scan 133-ms-SE-offset-neg2V-fine-2, x)
+
+**Profile.** From the ramp polarimeter's dip fits (`data/measured/…_extinction.csv`): ER > 3×10⁴ within ±15° of θ = 90°, where the values are noise-limited lower bounds; 1.0–1.4×10³ at 135–150°, about 25 % lower on the ramp back than on the ramp out; 1.5–3.5×10³ at rest and at the hold. Legs 1 and 2, which are 133 ms apart, agree within the error bars at most angles. The measurement gives |ellipticity| only, not its handedness. (`figures/extinction_echo.png` a)
+
+**Transport with the measured profile** (full anharmonic potentials, x, 10 kHz scale):
+
+- |3,±3⟩, h = −1: K06 gives 0.99926 / 0.99864 and R3 gives 0.99889 / 0.99848. With the new EOMs, K06 is adequate.
+- |3,±1⟩ is no longer excluded, since its shallow partner keeps most of its depth at π/2. R1 at 8 ms gives 0.99968 / 0.99909 (h = −1) and 0.99886 / 0.99953 (h = +1). R1 at 5 ms is worse, with a worst case of 0.99680, because its design assumed ER ≥ 10⁴ at every angle and the measured ~10³ at 135–150° lies outside its scenarios.
+
+**Echo phase from the light shift.** The transport partners |3,±m⟩ accumulate a differential light-shift phase during each transport, peaked within ±20° of θ = π/2 (`figures/extinction_echo.png` b–d). Along the measured 9 ms out-hold-back trajectory at the 10 kHz scale:
+
+| Pair | Ellipticity-independent ("drag") | Ellipticity contribution (upper bound) |
+|---|---|---|
+| |3,±3⟩ | 206 rad | ≤ 147 rad |
+| |3,±1⟩ | 35 rad | ≤ 82 rad |
+
+The upper bounds follow from the ER lower bounds near π/2. The echo cancels these phases only to the extent that the two legs are identical. Keeping the leg-to-leg residual below 0.1 rad requires:
+
+- the differential shift (intensity, or rotation timing near π/2) to match between legs to about 3×10⁻⁴ for |3,±3⟩, or 9×10⁻⁴ for |3,±1⟩;
+- the ellipticity near π/2 to match to |δη| < 5.5×10⁻⁶ for |3,±3⟩, or 8.4×10⁻⁶ for |3,±1⟩.
+
+The differential shift per unit ellipticity peaks at π/2 at 1.27 MHz (|3,±3⟩) and 1.45 MHz (|3,±1⟩), so the two pairs are equally exposed to ellipticity changes; |3,±1⟩ has a six times smaller drag term. (`scripts/echo_ellipticity_sensitivity.py`)
+
+**Leg-to-leg ellipticity in this scan.** At the angles where both legs have resolved ER values (|θ − 90°| > 37.5°), the measured differences imply an echo phase of −0.7 ± 0.6 rad (|3,±3⟩) and −0.25 ± 0.22 rad (|3,±1⟩). Both are consistent with zero, but not with 0.1 rad. The crossed-analyzer method measures η², so it cannot reach δη ~ 10⁻⁵ near π/2, where 80–90 % of the sensitivity lies. A signed, linear ellipticity measurement would: a quarter-wave plate plus balanced detection, i.e. Stokes S3. It would also determine the handedness.
