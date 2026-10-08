@@ -15,7 +15,9 @@ Geometry (Du 2025, Sec. 3.3.2, Eq. 3.7, written here for the x pair):
 
 Imperfect polarization of the rotating arm is an extinction ratio ER: a
 component in quadrature, orthogonal to the major axis, with amplitude
-eta = 1/sqrt(ER) and handedness h = +/-1. ER = inf is pure linear.
+eta = 1/sqrt(ER) and handedness h = +/-1. ER = inf is pure linear. ER may
+be a number or a callable of theta (e.g. a measured
+``fields.extinction.ExtinctionProfile``).
 
 Positions are in metres along the fringe direction; fields are dimensionless
 with unit amplitude per arm.
@@ -31,7 +33,7 @@ class LatticePair:
     wavelength_m: float = 843.222e-9
     spacing_m: float = 4.8374e-6
     rotation_sense: int = 1
-    extinction_ratio: float = np.inf
+    extinction_ratio: object = np.inf  # number, or callable ER(theta)
     handedness: int = 1
     relative_phase: float = np.pi
 
@@ -50,7 +52,8 @@ class LatticePair:
         u = np.array([np.cos(a), np.sin(a), 0.0])  # k_rot_hat x z
         major = np.cos(theta) * z + self.rotation_sense * np.sin(theta) * u
         minor = -np.sin(theta) * z + self.rotation_sense * np.cos(theta) * u
-        eta = 0.0 if np.isinf(self.extinction_ratio) else 1 / np.sqrt(self.extinction_ratio)
+        er = self.extinction_ratio(theta) if callable(self.extinction_ratio) else self.extinction_ratio
+        eta = 0.0 if np.isinf(er) else 1 / np.sqrt(float(er))
         rot = (major + 1j * self.handedness * eta * minor) / np.sqrt(1 + eta**2)
         return z.astype(complex), rot
 
