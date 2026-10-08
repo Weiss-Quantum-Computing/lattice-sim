@@ -39,3 +39,16 @@ def test_split_operator_matches_exact_gaussian():
     _, p_exact, _ = propagate_gaussian(t, theta, centre, frequency, sample_times_us=ts)
     assert np.max(np.abs(p_split - p_exact)) < 2e-5
     assert p_exact.min() < 0.99  # the test ramp is fast enough to excite
+
+
+def test_fast_gaussian_matches_adaptive_solver():
+    from lattice_sim.motion.fast_gaussian import propagate_scenarios
+
+    t = np.linspace(0, 1500, 1501)
+    theta = np.pi * (t / t[-1] - np.sin(2 * np.pi * t / t[-1]) / (2 * np.pi))
+    tg = np.arange(0, 1500 + 1e-9, 0.5)
+    thg = np.interp(tg, t, theta)
+    p_fast = propagate_scenarios(tg, centre(thg)[None], 2 * np.pi * frequency(thg)[None],
+                                 sample_every=40)[0]
+    _, p_exact, _ = propagate_gaussian(t, theta, centre, frequency, sample_times_us=tg[::40])
+    assert np.max(np.abs(p_fast - p_exact)) < 2e-6
