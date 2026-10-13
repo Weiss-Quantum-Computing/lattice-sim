@@ -182,3 +182,36 @@ Consequences:
 - **A common offset gives a depth gradient**: df_x/f_x = −2 r₀/w² per unit length (−1 % per µm at r₀ = 10 µm, w = 60 µm) along the offset direction, with a carrier gradient of −3.4 Hz/µm, i.e. −0.036 Hz of carrier per Hz of sideband. The sideband-frequency gradient measures the offset: r₀ = −(w²/2) d ln f/dz.
 - **A differential offset of the two arms gives a carrier gradient with no sideband gradient**, the same signature as a magnetic-field gradient. The mechanism is the ellipticity: the fictitious field at the trap minimum is ∝ η B (A − B) for arm amplitudes A, B, lies along the beams and is first order in the imbalance, so it moves the |4,−4⟩ → |3,−3⟩ carrier through its projection on the bias field. Per µm of relative arm offset: 3.4 Hz/µm at ER 3×10⁴, 18 Hz/µm at ER 10³, independent of the rotation (0, 3, 6 % give 34, 32, 26 Hz/µm for a 10 µm single-arm offset), odd in which arm is offset, along the direction of the relative offset. One µm of relative misalignment at ER 3×10⁴ mimics a 14 mG/cm field gradient. The same differential offset also costs contrast at the lattice edge (residual intensity (A − B)²).
 - **Decoupling recipe.** Measure the carrier and sideband-frequency gradients along x and z. A sideband gradient with a −0.036× carrier gradient is a common offset (fix by centering; the sideband gradient gives the offset). A carrier gradient without a sideband gradient is either a field gradient or a differential arm offset; halving the lattice intensity halves the light-induced part and leaves the field part, changing the extinction ratio changes only the light-induced part, and the light-induced part lies along the relative beam offset while the field gradient has a fixed direction. The explorer reports both gradients for the chosen arm offsets.
+
+## 2026-10-13 — Shape-robust suite ramp RS25
+
+**Design** (`scripts/design_suite_shape_robust.py`). The suite's own parametrization (`globalopt.theta_of`: angle warp exp(Σ c_j cos jπs), K = 12, composed with a 7th-order smoothstep in time), searched by vectorized differential evolution (144 members, 300 generations, seeded with the suite design where one exists) and Powell polish. Cost: worst 1 − P0 at the end of the rise (exact Gaussian, which includes the breathing excitation the suite's classical sloshing cost omits) over three shapes (ER316 calibration; first-principles model with the measured extinction profile, h = −1 and h = +1) × |3,−3⟩, |4,−3⟩ × K0 = 0.94 × {0.80 (weight 0.3), 0.85, 0.92, 1.00, 1.10, 1.15}; per-EOM PAR slew penalized above 9 V/µs. Acceptance: `theta_of` reproduces the N175 target to 2×10⁻⁸ deg, and the scorer reproduces `score_suite.py` for N175 (model 1.3×10⁻² / 9.1×10⁻³).
+
+**Achievable robustness versus duration** (worst 1 − P0 at end of rise, ×0.85–1.15, design grid):
+
+| Rise | Calibration | Model h = −1 | Model h = +1 | Slew (V/µs) |
+|---|---|---|---|---|
+| 1.75 ms (RS175) | 2.8×10⁻³ | 2.8×10⁻³ | 2.8×10⁻³ | 8.2 |
+| 2.0 ms | 2.6×10⁻³ | 2.6×10⁻³ | 2.6×10⁻³ | 7.4 |
+| 2.5 ms (RS25) | 4.1×10⁻⁴ | 5.5×10⁻⁴ | 5.4×10⁻⁴ | 5.65 |
+
+The minimax binds across shapes: at 1.75 ms no design in this family satisfies calibration and model together below ~3×10⁻³ (K = 16 gave no improvement in 220 generations). The 2.0 ms run was unseeded and may not be converged. RS25 dwells ~0.9 ms between 75° and 110°, where the shapes differ, and moves faster elsewhere (`figures/suite_shape_robust.png` a).
+
+**RS25 against the suite** (`scripts/figure_suite_shape_robust.py`, `data/suite_shape_robust_scan.json`; 0.01 steps in scale; "record" is one 200 µs | rise | hold | fall | 200 µs record, worst over holds 0–1 ms and over ×0.85–1.15):
+
+| Ramp | Rise, cal / h−1 / h+1 | Record, cal / h−1 / h+1 |
+|---|---|---|
+| S25 | 1.5×10⁻⁴ / 2.7×10⁻² / 7.6×10⁻³ | 5×10⁻⁴ / 0.10 / 3.0×10⁻² |
+| RS25 | 4.1×10⁻⁴ / 5.8×10⁻⁴ / 7.1×10⁻⁴ | 1.6×10⁻³ / 2.3×10⁻³ / 2.7×10⁻³ |
+| N175 | 3×10⁻⁶ / 1.3×10⁻² / 9.1×10⁻³ | 1×10⁻⁵ / 5.1×10⁻² / 3.6×10⁻² |
+| RS175 | 2.8×10⁻³ / 3.1×10⁻³ / 3.2×10⁻³ | 1.1×10⁻² / 1.2×10⁻² / 1.3×10⁻² |
+
+For reference, S47 under the model gives 5×10⁻⁴ at the end of the rise and 0.75–1.7×10⁻³ after a record with 1 ms hold (`score_suite.py`). RS25 therefore heats like S47 under either shape at 1.9× its speed. Outside the robust band RS25 reaches 1.8×10⁻³ at ×0.80 and 4.3×10⁻³ at ×0.75 (calibration).
+
+**Validation on the full anharmonic potentials** (`scripts/validate_suite_rs.py`, `data/validate_suite_rs.json`, `tests/test_suite_rs.py`). Split-step on the measured-profile tables (h = ±1, both states, ×0.85 / 1 / 1.15) agrees with the exact-Gaussian engine to 10–25 % in every scenario above 10⁻⁴: RS25 ≤ 5.9×10⁻⁴, S25 up to 2.3×10⁻².
+
+**Hardware.** `run_ilc.py init` limit check (Trek-EOM-ILC) passes on both channels: peak 5128 / 5137 V, slew 5.64 / 5.65 V/µs, 1.13 mA into the assumed 200 pF (S25 1.61 mA, N15 1.86 mA). The record is 3201 points (6.402 ms), the same burst period as S25 and C25. Transport phase 0.63 × run 024 (suite model), predicted winding 0.157π per plane against 0.147π for S25, so the S25 / RS25 pair differs in shape only.
+
+**A/B prediction (S25 against RS25, same duration).** If the calibration describes the lattice, both are null at the x-temperature resolution (≤ 1.6×10⁻³ per record). If the first-principles model does, S25 loses 3–10 % per record and RS25 ≤ 0.3 %. RS175 is not recommended: after a record it is 1.1–1.3×10⁻² under every shape, worse than N175 if the calibration holds and only 3–4× better if the model holds. Target files: `ramps/suite/target_RS25X{1,2}.csv`, `ramps/suite/RS25_prediction.json`.
+
+**Limits.** 1D along x; transverse motion and y/z coupling not modelled. The ×0.80 planes are weighted at 30 %, as in the suite. The heating in an echo (two records) depends on the record-to-record timing, which is not modelled; the per-record values bound each record.
