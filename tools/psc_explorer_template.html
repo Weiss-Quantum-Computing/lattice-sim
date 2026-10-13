@@ -1,0 +1,670 @@
+<title>Projection Cooling Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap">
+<style>
+/* Layout: a lab notebook page. Controls and the headline result on top, then the
+   physics in the order of one cooling step: ladder, Franck-Condon factors,
+   AFP transfer, per-level outcome, line positions, angle map. */
+:root {
+  --bg: #f3f5f6; --surface: #ffffff; --ink: #142029; --muted: #5a6a76; --rule: #d6dde2;
+  --accent: #1d4f91; --accent-soft: #e3ecf7;
+  --up: #2456b8; --lo: #c0432c;
+  --ax-x: #13808c; --ax-y: #b9821a; --ax-z: #7b4ea3;
+  --good: #2e8a57; --warn: #c48a12; --bad: #b8432f;
+  --grid: #e6ebee;
+  --f-display: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e1418; --surface: #151d23; --ink: #e2e8ed; --muted: #95a4b0; --rule: #2a353e;
+  --accent: #7fa8e6; --accent-soft: #1d2a3a;
+  --up: #7d9df0; --lo: #f08a6f;
+  --ax-x: #45bcc7; --ax-y: #e0b04e; --ax-z: #b38ad8;
+  --good: #5cc28a; --warn: #e4b64a; --bad: #ec7a62; --grid: #1f2a32; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0e1418; --surface: #151d23; --ink: #e2e8ed; --muted: #95a4b0; --rule: #2a353e;
+  --accent: #7fa8e6; --accent-soft: #1d2a3a;
+  --up: #7d9df0; --lo: #f08a6f;
+  --ax-x: #45bcc7; --ax-y: #e0b04e; --ax-z: #b38ad8;
+  --good: #5cc28a; --warn: #e4b64a; --bad: #ec7a62; --grid: #1f2a32; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.5 }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 48px; display: grid; gap: 20px }
+header h1 { font-family: var(--f-display); font-weight: 600; font-size: clamp(1.5rem, 3vw, 2rem); margin: 0; text-wrap: balance; letter-spacing: -0.01em }
+header p { margin: 6px 0 0; color: var(--muted); max-width: 72ch }
+.eyebrow { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted) }
+section { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 16px; display: grid; gap: 12px; min-width: 0; align-content: start }
+section > h2 { font-family: var(--f-display); font-weight: 600; font-size: 1.15rem; margin: 0; text-wrap: balance }
+section > .lede { margin: -6px 0 0; color: var(--muted); max-width: 80ch; font-size: 13px }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px }
+.grid2 > * { min-width: 0 }
+.row { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: end }
+label.ctl { display: grid; gap: 3px; font-size: 12px; color: var(--muted) }
+label.ctl span.v { font-family: var(--f-mono); color: var(--ink) }
+input[type=range] { width: 150px; accent-color: var(--accent) }
+select, input[type=number] { font: inherit; font-family: var(--f-mono); font-size: 13px; padding: 3px 6px; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); color: var(--ink) }
+input[type=number] { width: 4.2em }
+button { font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 4px; border: 1px solid var(--accent); background: var(--surface); color: var(--accent); cursor: pointer }
+button.primary { background: var(--accent); color: var(--surface) }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden }
+.seg button { border: 0; border-radius: 0; color: var(--muted); padding: 4px 10px }
+.seg button[aria-pressed=true] { background: var(--accent-soft); color: var(--accent); font-weight: 600 }
+table.angles { border-collapse: collapse; font-family: var(--f-mono); font-size: 13px }
+table.angles th, table.angles td { padding: 3px 8px; text-align: center; border-bottom: 1px solid var(--rule) }
+table.angles th { font-weight: 500; color: var(--muted); font-family: var(--f-body); font-size: 12px }
+table.angles td.k { text-align: left; font-family: var(--f-body); font-size: 12.5px; color: var(--ink) }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px }
+.kpi { border-left: 3px solid var(--rule); padding: 2px 10px }
+.kpi .n { font-family: var(--f-mono); font-size: 1.45rem; font-variant-numeric: tabular-nums; line-height: 1.2 }
+.kpi .l { font-size: 12px; color: var(--muted) }
+.kpi.main { border-left-color: var(--accent) }
+.kpi .n.sm { font-size: 1.02rem; padding-top: 0.25rem }
+.delta.pos { color: var(--good) } .delta.neg { color: var(--bad) }
+.chart { width: 100%; min-width: 0 }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible }
+.chart canvas { display: block; width: 100%; image-rendering: pixelated; border: 1px solid var(--rule) }
+.axis text, .lbl { fill: var(--muted); font-family: var(--f-mono); font-size: 10.5px }
+.axis line, .axis path { stroke: var(--rule) }
+.gridl { stroke: var(--grid) }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted) }
+.legend i { display: inline-block; width: 14px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 5px }
+.legend i.dash { border-top-style: dashed } .legend i.box { height: 9px; border: 0; width: 10px }
+.note { font-size: 12.5px; color: var(--muted); max-width: 90ch }
+.note b { color: var(--ink); font-weight: 600 }
+.readout { font-family: var(--f-mono); font-size: 12px; color: var(--muted); min-height: 1.5em }
+.pill { display: inline-block; font-family: var(--f-mono); font-size: 11.5px; padding: 1px 7px; border-radius: 10px; background: var(--accent-soft); color: var(--accent) }
+details summary { cursor: pointer; font-weight: 500 }
+ul.assume { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--muted); display: grid; gap: 3px; max-width: 95ch }
+.scroll { overflow-x: auto }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important } }
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">Weiss group · Cs 3D lattice · 843.222 nm · lattice-sim</div>
+  <h1>Projection Cooling Explorer</h1>
+  <p>Projection sideband cooling on the full |4,−4⟩ / |3,−3⟩ vibrational ladders: 3 ms AFP pulses on the exact state-dependent potentials, optical pumping with photon recoil, 40 cycles of x, y, z. Change the EO rotation angles and see what each step does to each level and to the final ground-state fraction.</p>
+</header>
+
+<section id="s-seq">
+  <h2>Sequence and result</h2>
+  <p class="lede">Each step on an axis: rotate to θ<sub>−2</sub>, AFP at +2f (|4,−4,n⟩→|3,−3,n−2⟩); rotate to θ<sub>−1</sub>, AFP at +f (back to |4,−4,n−1⟩, or |4,−4,n⟩→|3,−3,n−1⟩ for atoms the first pulse missed); rotate to 0 and optically pump whatever is in F = 3.</p>
+  <div class="grid2">
+    <div style="display:grid;gap:12px;min-width:0">
+      <div class="row">
+        <label class="ctl" for="omega">Carrier Rabi frequency Ω₀/2π
+          <select id="omega"></select></label>
+        <label class="ctl" for="temp">Initial temperature <span class="v" id="temp-v"></span>
+          <input type="range" id="temp" min="2" max="8" step="0.5"></label>
+        <label class="ctl" for="dark">Dark-state scatter per OP <span class="v" id="dark-v"></span>
+          <input type="range" id="dark" min="0" max="2" step="0.1"></label>
+      </div>
+      <div class="scroll">
+      <table class="angles" aria-label="Rotation angles per loop, pulse and axis">
+        <thead><tr><th></th><th>cycles</th><th>pulse</th><th>x</th><th>y</th><th>z</th><th>HSR (kHz)</th></tr></thead>
+        <tbody id="angle-body"></tbody>
+      </table>
+      </div>
+      <div class="row">
+        <label class="ctl" style="grid-auto-flow:column;align-items:center;gap:6px" for="link"><input type="checkbox" id="link" checked> same angle on x, y, z</label>
+        <button id="preset-lab" type="button">Lab settings</button>
+        <button id="preset-opt" type="button">Model optimum (same angles)</button>
+        <button id="preset-pa" type="button">Model optimum (per axis)</button>
+      </div>
+      <div class="kpis" id="kpis"></div>
+    </div>
+    <div style="display:grid;gap:8px;min-width:0">
+      <div class="chart" id="c-cycle"></div>
+      <div class="legend" id="l-cycle"></div>
+      <div class="chart" id="c-final"></div>
+      <div class="legend" id="l-final"></div>
+    </div>
+  </div>
+</section>
+
+<section id="s-focus">
+  <div class="row">
+    <label class="ctl" for="faxis">Axis in the panels below <select id="faxis"><option>x</option><option>y</option><option>z</option></select></label>
+    <label class="ctl">Loop
+      <span class="seg" id="floop"><button type="button" data-v="0" aria-pressed="true">Loop 1</button><button type="button" data-v="1" aria-pressed="false">Loop 2</button></span></label>
+    <span class="note" id="focus-note"></span>
+  </div>
+</section>
+
+<div class="grid2">
+<section id="s-ladder">
+  <h2>One step on the ladder</h2>
+  <p class="lede">Harmonic wavefunctions in the |4,−4⟩ (top) and |3,−3⟩ (bottom) wells, displaced by the rotation; arrows show the transfer probability of each AFP from the full ladder calculation.</p>
+  <div class="row">
+    <label class="ctl" for="ln">Initial level n <span class="v" id="ln-v"></span><input type="range" id="ln" min="1" max="20" step="1"></label>
+    <label class="ctl">Stage
+      <span class="seg" id="lstage"><button type="button" data-v="1" aria-pressed="true">−2 AFP</button><button type="button" data-v="2" aria-pressed="false">−1 AFP</button><button type="button" data-v="3" aria-pressed="false">Optical pumping</button></span></label>
+  </div>
+  <div class="chart" id="c-ladder"></div>
+  <div class="readout" id="r-ladder"></div>
+</section>
+
+<section id="s-fc">
+  <h2>Franck–Condon factors versus rotation</h2>
+  <p class="lede">|⟨3,−3,n−k | 4,−4,n⟩|² on the exact lattice potentials. Dark bands are the Laguerre nodes; the lines mark the angles of the selected loop.</p>
+  <div class="row"><span class="seg" id="fck"><button type="button" data-v="2" aria-pressed="true">Δn = −2</button><button type="button" data-v="1" aria-pressed="false">Δn = −1</button></span></div>
+  <div class="chart" id="c-fc"></div>
+  <div class="readout" id="r-fc">Hover the map for values.</div>
+</section>
+</div>
+
+<div class="grid2">
+<section id="s-afp">
+  <h2>AFP transfer per level</h2>
+  <p class="lede">Probability that each pulse of the selected loop makes its intended transition, against the Franck–Condon factor. A transfer near 1 means the pulse is saturated; it drops only near a node, outside the sweep, or where the carrier coupling shifts the line.</p>
+  <div class="chart" id="c-afp"></div>
+  <div class="legend" id="l-afp"></div>
+</section>
+<section id="s-out">
+  <h2>Outcome of one step per level</h2>
+  <p class="lede">Clean: n → n−1 with no optical pumping. Pumped: ends in F = 3 and is pumped (≈2.1 photons, heats all axes). Stuck: nothing happens. Levels where clean drops are where the step relies on optical pumping.</p>
+  <div class="chart" id="c-out"></div>
+  <div class="legend" id="l-out"></div>
+</section>
+</div>
+
+<div class="grid2">
+<section id="s-lines">
+  <h2>Line positions against the sweep</h2>
+  <p class="lede">Bare −2 and −1 line frequency for |4,−4,n⟩, relative to the programmed centre, with the ±HSR sweep shaded. The carrier shift with rotation and the differential trap frequency move hot atoms' lines toward the edge.</p>
+  <div class="chart" id="c-lines"></div>
+  <div class="legend" id="l-lines"></div>
+</section>
+<section id="s-map">
+  <h2>Angle map</h2>
+  <p class="lede">Final 3D ground fraction against the two angles of the selected loop, same angle on x, y and z, all other settings as above. Click a cell to use those angles.</p>
+  <div class="row"><button class="primary" id="map-run" type="button">Compute for current settings</button><span class="readout" id="r-map"></span></div>
+  <div class="chart" id="c-map"></div>
+  <div class="readout" id="r-map2"></div>
+</section>
+</div>
+
+<section id="s-notes">
+  <h2>What the model includes</h2>
+  <ul class="assume" id="assume"></ul>
+</section>
+</div>
+
+<script id="psc-data" type="application/json">/*__DATA__*/</script>
+<script>/*__ENGINE__*/</script>
+<script>
+(function () {
+"use strict";
+const D = JSON.parse(document.getElementById("psc-data").textContent);
+const E = new PSC(D);
+const AX = D.axes, N = D.N;
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const $ = (id) => document.getElementById(id);
+const pct = (v, d = 2) => (100 * v).toFixed(d) + " %";
+const SVGNS = "http://www.w3.org/2000/svg";
+
+// ---------------- state
+const LAB = { cycles: [30, 10], hsr: [-4000, -6000],
+  t2: [{ x: 12, y: 12, z: 12 }, { x: 13, y: 13, z: 13 }], t1: [{ x: 6, y: 6, z: 6 }, { x: 12, y: 12, z: 12 }] };
+const S = { omega: 20, T: D.initial_temperature_uK || 5, dark: 0, link: true, faxis: "x", floop: 0, ln: 6, stage: 1, fck: 2,
+  cycles: [...LAB.cycles], hsr: [...LAB.hsr], t2: LAB.t2.map((o) => ({ ...o })), t1: LAB.t1.map((o) => ({ ...o })) };
+let mapData = null, mapLoop = 0;
+
+function cfgFrom(st, light) {
+  return { omega: st.omega, T_uK: st.T, dark: st.dark / 100, light,
+    loops: [0, 1].map((i) => ({ cycles: st.cycles[i], t2: st.t2[i], t1: st.t1[i], hsr1: st.hsr[i] })) };
+}
+function labCfg(light) { return cfgFrom({ ...S, cycles: LAB.cycles, hsr: LAB.hsr, t2: LAB.t2, t1: LAB.t1 }, light); }
+
+// ---------------- controls
+function buildControls() {
+  const om = $("omega");
+  for (const o of D.omegas) { const e = document.createElement("option"); e.value = o; e.textContent = o + " kHz"; om.appendChild(e); }
+  om.value = S.omega;
+  om.onchange = () => { S.omega = Number(om.value); mapData = null; update(); };
+  const t = $("temp"); t.value = S.T; t.oninput = () => { S.T = Number(t.value); mapData = null; update(); };
+  const d = $("dark"); d.value = S.dark; d.oninput = () => { S.dark = Number(d.value); mapData = null; update(); };
+  $("link").onchange = (e) => { S.link = e.target.checked; if (S.link) syncLinked(); buildAngleTable(); update(); };
+  $("preset-lab").onclick = () => { applyPreset(LAB); };
+  $("preset-opt").onclick = () => {
+    const b = D.reference[String(S.omega)].best;
+    applyPreset({ cycles: LAB.cycles, hsr: LAB.hsr, t2: [all(b.t2a), all(b.t2b)], t1: [all(b.t1a), all(b.t1b)] });
+  };
+  $("preset-pa").onclick = () => {
+    const b = D.reference[String(S.omega)].per_axis;
+    S.link = false; $("link").checked = false;
+    applyPreset({ cycles: LAB.cycles, hsr: LAB.hsr, t2: [{ ...b.t2a }, { ...b.t2b }], t1: [{ ...b.t1a }, { ...b.t1b }] });
+  };
+  $("faxis").onchange = (e) => { S.faxis = e.target.value; updateDetail(); };
+  seg("floop", (v) => { S.floop = Number(v); updateDetail(); drawMap(); });
+  seg("lstage", (v) => { S.stage = Number(v); drawLadder(); });
+  seg("fck", (v) => { S.fck = Number(v); drawFC(); });
+  const ln = $("ln"); ln.value = S.ln; ln.oninput = () => { S.ln = Number(ln.value); drawLadder(); };
+  $("map-run").onclick = runMap;
+  buildAngleTable();
+}
+function all(v) { return { x: v, y: v, z: v }; }
+function seg(id, fn) {
+  const el = $(id);
+  el.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+    el.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    fn(b.dataset.v);
+  }));
+}
+function applyPreset(p) {
+  S.cycles = [...p.cycles]; S.hsr = [...p.hsr];
+  S.t2 = p.t2.map((o) => ({ ...o })); S.t1 = p.t1.map((o) => ({ ...o }));
+  if (S.link) syncLinked();
+  buildAngleTable(); mapData = null; update();
+}
+function syncLinked() { for (let i = 0; i < 2; i++) { S.t2[i] = all(S.t2[i].x); S.t1[i] = all(S.t1[i].x); } }
+function buildAngleTable() {
+  const tb = $("angle-body"); tb.innerHTML = "";
+  for (let i = 0; i < 2; i++) {
+    for (const [kind, key] of [[2, "t2"], [1, "t1"]]) {
+      const tr = document.createElement("tr");
+      const first = kind === 2;
+      tr.innerHTML = (first ? `<td class="k" rowspan="2">Loop ${i + 1}</td><td rowspan="2"><input type="number" id="cyc${i}" min="0" max="80" step="1" value="${S.cycles[i]}" aria-label="Loop ${i + 1} cycles"></td>` : "")
+        + `<td class="k">θ<sub>${kind === 2 ? "−2" : "−1"}</sub> (deg)</td>`
+        + AX.map((a) => `<td><input type="number" id="${key}${i}${a}" min="1" max="20" step="1" value="${S[key][i][a]}" ${S.link && a !== "x" ? "disabled" : ""} aria-label="Loop ${i + 1} ${key} ${a}"></td>`).join("")
+        + (kind === 2 ? `<td>±6</td>` : `<td><select id="hsr${i}" aria-label="Loop ${i + 1} -1 pulse HSR"><option value="-4000">±4</option><option value="-6000">±6</option></select></td>`);
+      tb.appendChild(tr);
+    }
+  }
+  for (let i = 0; i < 2; i++) {
+    $("cyc" + i).onchange = (e) => { S.cycles[i] = clampInt(e.target.value, 0, 80); e.target.value = S.cycles[i]; mapData = null; update(); };
+    $("hsr" + i).value = String(S.hsr[i]);
+    $("hsr" + i).onchange = (e) => { S.hsr[i] = Number(e.target.value); mapData = null; update(); };
+    for (const key of ["t2", "t1"]) for (const a of AX) {
+      $(key + i + a).onchange = (e) => {
+        const v = clampInt(e.target.value, 1, 20); e.target.value = v;
+        if (S.link) { S[key][i] = all(v); AX.forEach((b) => { $(key + i + b).value = v; }); } else S[key][i][a] = v;
+        mapData = null; update();
+      };
+    }
+  }
+}
+function clampInt(v, lo, hi) { v = Math.round(Number(v)); return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : lo; }
+
+// ---------------- svg helpers
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function niceTicks(lo, hi, n) {
+  const span = hi - lo, step0 = span / Math.max(1, n), mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= step0) || step0;
+  const out = []; for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10));
+  return out;
+}
+// frame: returns {svg, x(v), y(v), g}
+function frame(container, opt) {
+  container.innerHTML = "";
+  const W = Math.max(300, container.clientWidth || 600), H = opt.height || 240;
+  const m = { l: 52, r: 14, t: 10, b: 38, ...(opt.margin || {}) };
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", "aria-label": opt.aria || "" }, container);
+  const [x0, x1] = opt.x, [y0, y1] = opt.y;
+  const ylog = !!opt.ylog;
+  const fx = (v) => m.l + (v - x0) / (x1 - x0) * (W - m.l - m.r);
+  const fy = ylog ? (v) => m.t + (Math.log10(y1) - Math.log10(Math.max(v, y0))) / (Math.log10(y1) - Math.log10(y0)) * (H - m.t - m.b)
+                  : (v) => m.t + (y1 - v) / (y1 - y0) * (H - m.t - m.b);
+  const ax = el("g", { class: "axis" }, svg);
+  const xt = opt.xticks || niceTicks(x0, x1, Math.max(3, Math.floor((W - m.l - m.r) / 70)));
+  const yt = opt.yticks || (ylog ? logTicks(y0, y1) : niceTicks(y0, y1, 5));
+  for (const t of yt) {
+    if (!opt.nogrid) el("line", { x1: m.l, x2: W - m.r, y1: fy(t), y2: fy(t), class: "gridl" }, ax);
+    const tx = el("text", { x: m.l - 6, y: fy(t) + 3.5, "text-anchor": "end" }, ax); tx.textContent = opt.yfmt ? opt.yfmt(t) : String(t);
+  }
+  for (const t of xt) {
+    el("line", { x1: fx(t), x2: fx(t), y1: H - m.b, y2: H - m.b + 4 }, ax);
+    const tx = el("text", { x: fx(t), y: H - m.b + 15, "text-anchor": "middle" }, ax); tx.textContent = opt.xfmt ? opt.xfmt(t) : String(t);
+  }
+  el("rect", { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: "none", stroke: css("--rule") }, ax);
+  const xl = el("text", { x: (m.l + W - m.r) / 2, y: H - 6, "text-anchor": "middle", class: "lbl" }, svg); xl.textContent = opt.xlabel || "";
+  const yl = el("text", { x: 12, y: (m.t + H - m.b) / 2, "text-anchor": "middle", class: "lbl", transform: `rotate(-90 12 ${(m.t + H - m.b) / 2})` }, svg); yl.textContent = opt.ylabel || "";
+  const g = el("g", {}, svg);
+  return { svg, g, x: fx, y: fy, W, H, m };
+}
+function logTicks(lo, hi) { const o = []; for (let e = Math.ceil(Math.log10(lo)); e <= Math.floor(Math.log10(hi)); e++) o.push(Math.pow(10, e)); return o; }
+function path(f, xs, ys, attrs) {
+  let d = ""; let pen = false;
+  for (let i = 0; i < xs.length; i++) {
+    if (ys[i] == null || !Number.isFinite(ys[i])) { pen = false; continue; }
+    d += (pen ? "L" : "M") + f.x(xs[i]).toFixed(1) + "," + f.y(ys[i]).toFixed(1); pen = true;
+  }
+  return el("path", { d, fill: "none", "stroke-width": 1.6, ...attrs }, f.g);
+}
+function legend(id, items) {
+  $(id).innerHTML = items.map((it) => `<span><i class="${it.cls || ""}" style="border-color:${it.c};${it.cls === "box" ? "background:" + it.c : ""}"></i>${it.t}</span>`).join("");
+}
+
+// ---------------- main result
+let simCur = null, simLab = null;
+function update() {
+  simCur = E.simulate(cfgFrom(S, false));
+  simLab = E.simulate(labCfg(false));
+  $("temp-v").textContent = S.T.toFixed(1) + " µK";
+  $("dark-v").textContent = S.dark.toFixed(1) + " %";
+  drawKpis(); drawCycle(); drawFinal(); updateDetail(); drawMap();
+}
+function drawKpis() {
+  const f = simCur.hist.at(-1), fl = simLab.hist.at(-1);
+  const dl = f.g3 - fl.g3;
+  const n0 = simCur.hist[0].nbar;
+  const k = [
+    { n: pct(f.g3), l: "3D ground fraction after " + (S.cycles[0] + S.cycles[1]) + " cycles", main: true },
+    { n: `<span class="delta ${dl >= 0 ? "pos" : "neg"}">${dl >= 0 ? "+" : "−"}${(100 * Math.abs(dl)).toFixed(2)} pts</span>`, l: "against the lab settings (" + pct(fl.g3) + ")" },
+    { n: AX.map((a) => (100 * f.ground[a]).toFixed(1)).join(" / "), l: "per axis x / y / z (%)", sm: true },
+    { n: simCur.opEvents.toFixed(1), l: "optical-pumping events per atom" },
+    { n: AX.map((a) => n0[a].toFixed(1)).join(" / "), l: "initial n̄, x / y / z (thermal)", sm: true },
+  ];
+  $("kpis").innerHTML = k.map((o) => `<div class="kpi ${o.main ? "main" : ""}"><div class="n ${o.sm ? "sm" : ""}">${o.n}</div><div class="l">${o.l}</div></div>`).join("");
+}
+function drawCycle() {
+  const c = $("c-cycle"), n = simCur.hist.length;
+  const xs = [...Array(n).keys()];
+  const f = frame(c, { x: [0, n - 1], y: [0, 1], height: 230, xlabel: "cooling cycle (x, y, z)", ylabel: "ground-state fraction", aria: "Ground fraction against cycle" });
+  const l1 = S.cycles[0];
+  el("line", { x1: f.x(l1), x2: f.x(l1), y1: f.m.t, y2: f.H - f.m.b, stroke: css("--rule"), "stroke-dasharray": "3 3" }, f.g);
+  const tl = el("text", { x: f.x(l1) + 4, y: f.m.t + 12, class: "lbl" }, f.g); tl.textContent = "loop 2 →";
+  const ax = { x: css("--ax-x"), y: css("--ax-y"), z: css("--ax-z") };
+  for (const a of AX) path(f, xs, simCur.hist.map((h) => h.ground[a]), { stroke: ax[a], "stroke-width": 1, opacity: 0.85 });
+  path(f, [...Array(simLab.hist.length).keys()], simLab.hist.map((h) => h.g3), { stroke: css("--muted"), "stroke-dasharray": "5 4" });
+  path(f, xs, simCur.hist.map((h) => h.g3), { stroke: css("--ink"), "stroke-width": 2.2 });
+  // 0.96 measured (Du)
+  el("line", { x1: f.m.l, x2: f.W - f.m.r, y1: f.y(0.96), y2: f.y(0.96), stroke: css("--warn"), "stroke-width": 0.8, "stroke-dasharray": "2 3" }, f.g);
+  const tm = el("text", { x: f.m.l + 6, y: f.y(0.96) - 4, class: "lbl" }, f.g); tm.textContent = "measured 3D, Du: 0.96";
+  legend("l-cycle", [{ c: css("--ink"), t: "3D, these settings" }, { c: css("--muted"), t: "3D, lab settings", cls: "dash" },
+    { c: ax.x, t: "x" }, { c: ax.y, t: "y" }, { c: ax.z, t: "z" }, { c: css("--warn"), t: "measured", cls: "dash" }]);
+}
+function drawFinal() {
+  const c = $("c-final"), last = simCur.hist.at(-1);
+  const nmax = 30;
+  const f = frame(c, { x: [-0.5, nmax + 0.5], y: [1e-6, 1], ylog: true, height: 190, xlabel: "vibrational level n (final)", ylabel: "population", yfmt: (t) => "10" + sup(Math.round(Math.log10(t))), aria: "Final populations per level" });
+  const ax = { x: css("--ax-x"), y: css("--ax-y"), z: css("--ax-z") };
+  const bw = (f.x(1) - f.x(0)) / 4;
+  AX.forEach((a, k) => {
+    for (let n = 0; n <= nmax; n++) {
+      const v = last.dist[a][n]; if (v < 1e-6) continue;
+      el("rect", { x: f.x(n) + (k - 1.5) * bw, width: bw * 0.95, y: f.y(v), height: f.H - f.m.b - f.y(v), fill: ax[a] }, f.g);
+    }
+  });
+  legend("l-final", AX.map((a) => ({ c: ax[a], t: a, cls: "box" })));
+}
+function sup(n) { const m = { "-": "⁻", 0: "⁰", 1: "¹", 2: "²", 3: "³", 4: "⁴", 5: "⁵", 6: "⁶", 7: "⁷", 8: "⁸", 9: "⁹" }; return String(n).split("").map((c) => m[c]).join(""); }
+
+// ---------------- detail panels
+function th2() { return S.t2[S.floop][S.faxis]; }
+function th1() { return S.t1[S.floop][S.faxis]; }
+function updateDetail() {
+  $("focus-note").innerHTML = `Loop ${S.floop + 1} on ${S.faxis}: θ<sub>−2</sub> = ${th2()}°, θ<sub>−1</sub> = ${th1()}°, −1 sweep ±${Math.abs(S.hsr[S.floop]) / 1000} kHz; −1 offset ${(D.offsets[S.faxis] / 1000).toFixed(1)} kHz.`;
+  drawLadder(); drawFC(); drawAfp(); drawOut(); drawLines();
+}
+function fcRow(axis, th) { return D.fc[axis][Math.round(th * 2)]; }
+
+function hermiteSet(nmax, xi) {
+  const out = []; let p0 = Math.pow(Math.PI, -0.25) * Math.exp(-xi * xi / 2), p1 = Math.SQRT2 * xi * p0;
+  out.push(p0); if (nmax >= 1) out.push(p1);
+  for (let k = 1; k < nmax; k++) { const p2 = Math.sqrt(2 / (k + 1)) * xi * p1 - Math.sqrt(k / (k + 1)) * p0; out.push(p2); p0 = p1; p1 = p2; }
+  return out;
+}
+function drawLadder() {
+  const a = S.faxis, n = S.ln, st = S.stage;
+  $("ln-v").textContent = n;
+  const theta = st === 1 ? th2() : st === 2 ? th1() : 0;
+  const dnm = fcRow(a, theta).d_nm;
+  const hbar = 1.054571817e-34, m = 2.2069465e-25, w = 2 * Math.PI * D.offsets[a];
+  const ell = Math.sqrt(hbar / (m * w)) * 1e9;            // nm, oscillator length
+  const nTop = Math.max(n + 2, 6);
+  const xr = ell * Math.sqrt(2 * nTop + 1) * 1.25 + Math.abs(dnm);
+  const c = $("c-ladder");
+  c.innerHTML = "";
+  const W = Math.max(300, c.clientWidth || 520), Hh = 360, mL = 46, mR = 120, gap = 34, panel = (Hh - gap - 30) / 2;
+  const svg = el("svg", { viewBox: `0 0 ${W} ${Hh}`, width: W, height: Hh, role: "img", "aria-label": "Ladder diagram of one cooling step" }, c);
+  const X = (xnm) => mL + (xnm + xr) / (2 * xr) * (W - mL - mR);
+  const levelY = (top, k) => (top ? 8 : 8 + panel + gap) + panel - (k + 0.5) / (nTop + 1) * panel;
+  const cU = css("--up"), cL = css("--lo"), mu = css("--muted");
+  const fcv = fcRow(a, theta);
+  const centres = { up: 0, lo: dnm };
+  for (const top of [true, false]) {
+    const c0 = top ? centres.up : centres.lo, col = top ? cU : cL;
+    // potential
+    let d = "";
+    for (let i = 0; i <= 120; i++) {
+      const xnm = -xr + 2 * xr * i / 120, q = (xnm - c0) / ell, e = q * q / 2 - 0.5;
+      const y = levelY(top, Math.min(e, nTop + 0.4)); d += (i ? "L" : "M") + X(xnm).toFixed(1) + "," + y.toFixed(1);
+    }
+    el("path", { d, fill: "none", stroke: col, "stroke-width": 1.2, opacity: 0.7 }, svg);
+    for (let k = 0; k <= nTop; k++) {
+      const half = ell * Math.sqrt(2 * k + 1);
+      el("line", { x1: X(c0 - half), x2: X(c0 + half), y1: levelY(top, k), y2: levelY(top, k), stroke: col, "stroke-width": 0.7, opacity: 0.45 }, svg);
+    }
+    const lab = el("text", { x: W - mR + 8, y: (top ? 8 : 8 + panel + gap) + 14, class: "lbl", fill: col }, svg);
+    lab.textContent = top ? "|4,−4, n⟩" : "|3,−3, m⟩";
+  }
+  // hyperfine break
+  const yb = 8 + panel + gap / 2;
+  const tb = el("text", { x: mL, y: yb + 4, class: "lbl" }, svg); tb.textContent = "≈ 9.19 GHz (not to scale)";
+  // wavefunctions involved
+  const wf = (top, k, col) => {
+    const c0 = top ? centres.up : centres.lo, base = levelY(top, k), amp = panel / (nTop + 1) * 0.9;
+    let d = "";
+    for (let i = 0; i <= 200; i++) {
+      const xnm = -xr + 2 * xr * i / 200, xi = (xnm - c0) / ell, h = hermiteSet(k, xi)[k];
+      d += (i ? "L" : "M") + X(xnm).toFixed(1) + "," + (base - amp * h).toFixed(1);
+    }
+    el("path", { d, fill: "none", stroke: col, "stroke-width": 1.8 }, svg);
+  };
+  const arrow = (x, yA, yB, col, txt, dashed) => {
+    el("line", { x1: x, x2: x, y1: yA, y2: yB, stroke: col, "stroke-width": 2, "stroke-dasharray": dashed ? "4 3" : "none" }, svg);
+    const s = yB > yA ? 1 : -1;
+    el("path", { d: `M${x - 5},${yB - 8 * s} L${x},${yB} L${x + 5},${yB - 8 * s} Z`, fill: col }, svg);
+    const t = el("text", { x: x + 8, y: (yA + yB) / 2, class: "lbl", fill: col }, svg); t.textContent = txt;
+  };
+  const om = S.omega, hsr = S.hsr[S.floop];
+  let text = "";
+  const xA = W - mR - 6;
+  if (st === 1) {
+    wf(true, n, cU); if (n >= 2) wf(false, n - 2, cL);
+    const P = E.pulseTransfer(om, a, th2(), 2, -6000).fwd[n];
+    if (n >= 2) arrow(xA, levelY(true, n), levelY(false, n - 2), css("--accent"), "P = " + P.toFixed(3));
+    const A2 = n >= 2 ? fcv.m2[n - 2] : 0;
+    text = n >= 2 ? `θ = ${theta}°: wells displaced by ${Math.abs(dnm).toFixed(1)} nm (${(Math.abs(dnm) / ell * Math.SQRT1_2).toFixed(2)} x₀). |⟨n−2|n⟩|² = ${A2.toFixed(4)}; −2 AFP transfer ${P.toFixed(3)}.`
+                  : `n = 1 has no Δn = −2 partner; it waits for the −1 pulse.`;
+  } else if (st === 2) {
+    const pt = E.pulseTransfer(om, a, th1(), 1, hsr);
+    if (n >= 2) { wf(false, n - 2, cL); wf(true, n - 1, cU); arrow(xA, levelY(false, n - 2), levelY(true, n - 1), css("--accent"), "P = " + pt.back[n - 2].toFixed(3)); }
+    else { wf(true, n, cU); wf(false, n - 1, cL); }
+    const Pm = pt.fwd[n];
+    arrow(xA - 52, levelY(true, n), levelY(false, n - 1), css("--warn"), "P = " + Pm.toFixed(3), true);
+    text = `θ = ${theta}°: return |3,−3,n−2⟩ → |4,−4,n−1⟩ (solid); atoms still in |4,−4,n⟩ go to |3,−3,n−1⟩ (dashed) and will be pumped. |⟨n−1|n⟩|² = ${fcv.m1[n - 1].toFixed(4)}.`;
+  } else {
+    wf(false, Math.max(0, n - 2), cL); wf(true, Math.max(0, n - 1), cU);
+    const xs = xA, y0 = levelY(false, Math.max(0, n - 2)), y1 = levelY(true, Math.max(0, n - 1));
+    let d = ""; const steps = 40;
+    for (let i = 0; i <= steps; i++) { const y = y0 + (y1 - y0) * i / steps; d += (i ? "L" : "M") + (xs + 5 * Math.sin(i * 1.2)).toFixed(1) + "," + y.toFixed(1); }
+    el("path", { d, fill: "none", stroke: css("--warn"), "stroke-width": 1.6 }, svg);
+    const H = D.heat[a]; const k = Math.max(0, n - 1);
+    const t = el("text", { x: xs + 10, y: (y0 + y1) / 2, class: "lbl", fill: css("--warn") }, svg); t.textContent = `${D.op.mean_photons.toFixed(2)} photons`;
+    text = `θ = 0: σ⁻ optical pumping (4→4′ with 3→4′ repump) returns F = 3 atoms to |4,−4⟩ after ${D.op.mean_photons.toFixed(2)} photons on average. Recoil leaves level ${k} unchanged with probability ${H[k][k].toFixed(3)} on ${a}, and kicks the other two axes as well.`;
+  }
+  const o = E.outcomes(om, a, th2(), th1(), hsr);
+  $("r-ladder").innerHTML = text + `<br>Whole step from n = ${n}: clean ${o.clean[n].toFixed(3)}, pumped ${o.pumped[n].toFixed(3)}, stuck ${o.stuck[n].toFixed(3)}.`;
+}
+
+// colormap (cividis-like stops)
+const CM = [[0, 32, 76], [0, 67, 106], [61, 89, 108], [102, 105, 112], [138, 132, 120], [181, 160, 105], [222, 191, 79], [253, 231, 55]];
+function cmap(t) {
+  t = Math.min(1, Math.max(0, t)); const s = t * (CM.length - 1), i = Math.min(CM.length - 2, Math.floor(s)), f = s - i;
+  const c = CM[i].map((v, k) => Math.round(v + (CM[i + 1][k] - v) * f)); return c;
+}
+function heatmap(container, opt) {
+  container.innerHTML = "";
+  const W = Math.max(300, container.clientWidth || 520), H = opt.height || 260, m = { l: 52, r: 58, t: 8, b: 38 };
+  const wrap = document.createElement("div"); wrap.style.position = "relative"; container.appendChild(wrap);
+  const cv = document.createElement("canvas"); const nx = opt.nx, ny = opt.ny;
+  cv.width = nx; cv.height = ny;
+  cv.style.cssText = `position:absolute;left:${m.l}px;top:${m.t}px;width:${W - m.l - m.r}px;height:${H - m.t - m.b}px;border:0;image-rendering:pixelated`;
+  const ctx = cv.getContext("2d"), img = ctx.createImageData(nx, ny);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const v = opt.value(i, j), o = 4 * ((ny - 1 - j) * nx + i);
+    if (v == null) { img.data[o + 3] = 0; continue; }
+    const c = cmap((v - opt.vmin) / (opt.vmax - opt.vmin)); img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  const f = frame(wrap, { nogrid: true, x: opt.x, y: opt.y, height: H, margin: m, xlabel: opt.xlabel, ylabel: opt.ylabel, xticks: opt.xticks, yticks: opt.yticks, aria: opt.aria });
+  f.svg.style.position = "relative";
+  wrap.insertBefore(cv, f.svg);
+  // colour bar
+  const cb = el("g", {}, f.svg), bx = W - m.r + 12, bh = H - m.t - m.b;
+  for (let k = 0; k < 40; k++) { const c = cmap(k / 39); el("rect", { x: bx, y: m.t + bh * (1 - (k + 1) / 40), width: 10, height: bh / 40 + 0.5, fill: `rgb(${c})` }, cb); }
+  for (const t of opt.cbticks) {
+    const y = m.t + bh * (1 - (t - opt.vmin) / (opt.vmax - opt.vmin));
+    const tx = el("text", { x: bx + 14, y: y + 3.5, class: "lbl" }, cb); tx.textContent = opt.cbfmt ? opt.cbfmt(t) : t;
+  }
+  return { f, cv, m, W, H };
+}
+
+function drawFC() {
+  const a = S.faxis, k = S.fck, th = D.fc_thetas, nmax = 40;
+  const vals = (i, j) => { const n = i; const r = D.fc[a][j]; if (n < k) return null; return (k === 2 ? r.m2[n - 2] : r.m1[n - 1]); };
+  const hm = heatmap($("c-fc"), { nx: nmax, ny: th.length, value: vals, vmin: 0, vmax: 0.4, x: [-0.5, nmax - 0.5], y: [-0.25, 20.25],
+    xlabel: "initial level n", ylabel: "rotation θ (deg)", yticks: [0, 5, 10, 15, 20], cbticks: [0, 0.1, 0.2, 0.3, 0.4], height: 270, aria: "Franck-Condon map" });
+  const f = hm.f;
+  const lines = [[th2(), "θ−2", "6 3"], [th1(), "θ−1", "2 3"]];
+  for (const [t, nm, da] of lines) {
+    el("line", { x1: f.m.l, x2: f.W - f.m.r, y1: f.y(t), y2: f.y(t), stroke: "#ffffff", "stroke-width": 1.2, "stroke-dasharray": da }, f.g);
+    const tx = el("text", { x: f.W - f.m.r - 4, y: f.y(t) - 3, "text-anchor": "end", fill: "#ffffff", "font-size": 10.5, "font-family": "var(--f-mono)" }, f.g); tx.textContent = nm + " " + t + "°";
+  }
+  f.svg.addEventListener("mousemove", (ev) => {
+    const r = f.svg.getBoundingClientRect(), px = (ev.clientX - r.left) * f.W / r.width, py = (ev.clientY - r.top) * f.H / r.height;
+    const n = Math.round(-0.5 + (px - f.m.l) / (f.W - f.m.l - f.m.r) * nmax), t = Math.round((20.25 - (py - f.m.t) / (f.H - f.m.t - f.m.b) * 20.5) * 2) / 2;
+    if (n < k || n >= nmax || t < 0 || t > 20) { $("r-fc").textContent = "Hover the map for values."; return; }
+    $("r-fc").textContent = `n = ${n}, θ = ${t.toFixed(1)}°: |⟨n${-k}|n⟩|² = ${vals(n, Math.round(t * 2)).toFixed(4)}, displacement ${Math.abs(D.fc[a][Math.round(t * 2)].d_nm).toFixed(1)} nm`;
+  });
+}
+
+function drawAfp() {
+  const a = S.faxis, om = S.omega, hsr = S.hsr[S.floop], nmax = 40;
+  const f = frame($("c-afp"), { x: [0, nmax - 1], y: [0, 1.02], height: 240, xlabel: "initial level n", ylabel: "probability", yticks: [0, 0.25, 0.5, 0.75, 1], aria: "AFP transfer per level" });
+  const xs = [...Array(nmax).keys()];
+  const p2 = E.pulseTransfer(om, a, th2(), 2, -6000).fwd.slice(0, nmax);
+  const p1 = E.pulseTransfer(om, a, th1(), 1, hsr).fwd.slice(0, nmax);
+  const p1b = E.pulseTransfer(om, a, th1(), 1, hsr).back.slice(0, nmax);
+  const r2 = fcRow(a, th2()), r1 = fcRow(a, th1());
+  const f2 = xs.map((n) => (n >= 2 ? r2.m2[n - 2] : null)), f1 = xs.map((n) => (n >= 1 ? r1.m1[n - 1] : null));
+  path(f, xs, f2, { stroke: css("--up"), "stroke-dasharray": "2 3", "stroke-width": 1.2 });
+  path(f, xs, f1, { stroke: css("--lo"), "stroke-dasharray": "2 3", "stroke-width": 1.2 });
+  path(f, xs, xs.map((n) => (n >= 2 ? p2[n] : null)), { stroke: css("--up") });
+  path(f, xs, xs.map((n) => (n >= 1 ? p1[n] : null)), { stroke: css("--lo") });
+  path(f, xs.map((n) => n + 2), xs.map((n) => p1b[n]), { stroke: css("--lo"), "stroke-width": 1, opacity: 0.6, "stroke-dasharray": "6 3" });
+  legend("l-afp", [{ c: css("--up"), t: `−2 AFP at ${th2()}°: n→n−2` }, { c: css("--lo"), t: `−1 AFP at ${th1()}°: n→n−1` },
+    { c: css("--lo"), t: "−1 AFP return |3,−3,n−2⟩→|4,−4,n−1⟩", cls: "dash" }, { c: css("--muted"), t: "dotted: Franck–Condon factor", cls: "dash" }]);
+}
+
+function drawOut() {
+  const a = S.faxis, om = S.omega, hsr = S.hsr[S.floop], nmax = 40;
+  const o = E.outcomes(om, a, th2(), th1(), hsr);
+  const f = frame($("c-out"), { x: [-0.5, nmax - 0.5], y: [0, 1], height: 240, xlabel: "initial level n", ylabel: "probability per step", yticks: [0, 0.25, 0.5, 0.75, 1], aria: "Step outcome per level" });
+  const bw = (f.x(1) - f.x(0)) * 0.82;
+  for (let n = 0; n < nmax; n++) {
+    let y = 0;
+    for (const [v, c] of [[o.clean[n], css("--good")], [o.pumped[n], css("--warn")], [o.stuck[n], css("--bad")]]) {
+      if (v <= 1e-4) continue;
+      el("rect", { x: f.x(n) - bw / 2, width: bw, y: f.y(Math.min(1, y + v)), height: Math.max(0, f.y(y) - f.y(Math.min(1, y + v))), fill: c }, f.g);
+      y += v;
+    }
+  }
+  legend("l-out", [{ c: css("--good"), t: "clean n→n−1", cls: "box" }, { c: css("--warn"), t: "optically pumped", cls: "box" }, { c: css("--bad"), t: "stuck in |4,−4,n⟩", cls: "box" }]);
+}
+
+function drawLines() {
+  const a = S.faxis, nmax = 40, hsr = Math.abs(S.hsr[S.floop]) / 1000;
+  const L2 = D.lines[a][Math.round(th2() * 2)], L1 = D.lines[a][Math.round(th1() * 2)];
+  const xs = [...Array(nmax).keys()];
+  const y2 = xs.map((n) => (n >= 2 ? L2.l2[n - 2] / 1000 : null)), y1 = xs.map((n) => (n >= 1 ? L1.l1[n - 1] / 1000 : null));
+  const lo = Math.min(-7, ...y2.filter((v) => v != null), ...y1.filter((v) => v != null)) - 0.5, hi = Math.max(7, ...y2.filter((v) => v != null), ...y1.filter((v) => v != null)) + 0.5;
+  const f = frame($("c-lines"), { x: [0, nmax - 1], y: [lo, hi], height: 240, xlabel: "initial level n", ylabel: "line − programmed centre (kHz)", aria: "Line positions against sweep" });
+  el("rect", { x: f.m.l, width: f.W - f.m.l - f.m.r, y: f.y(6), height: f.y(-6) - f.y(6), fill: css("--up"), opacity: 0.08 }, f.g);
+  el("rect", { x: f.m.l, width: f.W - f.m.l - f.m.r, y: f.y(hsr), height: f.y(-hsr) - f.y(hsr), fill: css("--lo"), opacity: 0.08 }, f.g);
+  for (const [v, c] of [[6, css("--up")], [-6, css("--up")], [hsr, css("--lo")], [-hsr, css("--lo")]])
+    el("line", { x1: f.m.l, x2: f.W - f.m.r, y1: f.y(v), y2: f.y(v), stroke: c, "stroke-dasharray": "3 3", "stroke-width": 0.8 }, f.g);
+  path(f, xs, y2, { stroke: css("--up") });
+  path(f, xs, y1, { stroke: css("--lo") });
+  legend("l-lines", [{ c: css("--up"), t: `−2 line at ${th2()}° (sweep ±6 kHz)` }, { c: css("--lo"), t: `−1 line at ${th1()}° (sweep ±${hsr} kHz)` }]);
+}
+
+// ---------------- angle map
+function drawMap() {
+  const loop = S.floop;
+  let data = mapData && mapLoop === loop ? mapData : null, label;
+  if (!data) {
+    const ref = D.reference[String(S.omega)];
+    const isLabBase = S.T === (D.initial_temperature_uK || 5) && S.dark === 0 && S.cycles[0] === 30 && S.cycles[1] === 10 && S.hsr[0] === -4000 && S.hsr[1] === -6000;
+    data = loop === 0 ? ref.scan1 : ref.scan2;
+    label = isLabBase ? `Precomputed at ${S.omega} kHz with the other loop at the lab angles.` : `Showing the precomputed map (other loop at lab angles, ${D.initial_temperature_uK || 5} µK); press Compute for the current settings.`;
+  } else label = `Computed for the current settings, loop ${loop + 1}.`;
+  $("r-map").textContent = label;
+  const grid = D.grid_deg, n = grid.length;
+  let vmax = 0, vmin = 1, best = [0, 0];
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { const v = data[i][j]; if (v > vmax) { vmax = v; best = [i, j]; } vmin = Math.min(vmin, v); }
+  const lo = Math.max(vmin, vmax - 0.05);
+  const hm = heatmap($("c-map"), { nx: n, ny: n, value: (i, j) => data[j][i], vmin: lo, vmax, x: [grid[0] - 0.5, grid[n - 1] + 0.5], y: [grid[0] - 0.5, grid[n - 1] + 0.5],
+    xlabel: `loop ${loop + 1}: θ−1 (deg)`, ylabel: `loop ${loop + 1}: θ−2 (deg)`, xticks: [1, 5, 10, 15, 20], yticks: [1, 5, 10, 15, 20],
+    cbticks: niceTicks(lo, vmax, 4), cbfmt: (t) => (100 * t).toFixed(1), height: 300, aria: "Angle map of the final 3D ground fraction" });
+  const f = hm.f;
+  const cur = [S.t2[loop].x, S.t1[loop].x];
+  el("circle", { cx: f.x(cur[1]), cy: f.y(cur[0]), r: 6, fill: "none", stroke: "#ffffff", "stroke-width": 1.8 }, f.g);
+  const bx = f.x(grid[best[1]]), by = f.y(grid[best[0]]);
+  el("path", { d: `M${bx - 5},${by - 5}L${bx + 5},${by + 5}M${bx - 5},${by + 5}L${bx + 5},${by - 5}`, stroke: "#ffffff", "stroke-width": 2 }, f.g);
+  $("r-map2").textContent = `Best on this map: θ−2 = ${grid[best[0]]}°, θ−1 = ${grid[best[1]]}°, ${pct(vmax)}. Circle: current loop ${loop + 1} angles (x). Colour scale in %.`;
+  f.svg.style.cursor = "pointer";
+  f.svg.addEventListener("click", (ev) => {
+    const r = f.svg.getBoundingClientRect(), px = (ev.clientX - r.left) * f.W / r.width, py = (ev.clientY - r.top) * f.H / r.height;
+    const t1 = Math.round(grid[0] - 0.5 + (px - f.m.l) / (f.W - f.m.l - f.m.r) * n), t2 = Math.round(grid[n - 1] + 0.5 - (py - f.m.t) / (f.H - f.m.t - f.m.b) * n);
+    if (t1 < 1 || t1 > 20 || t2 < 1 || t2 > 20) return;
+    S.t2[loop] = all(t2); S.t1[loop] = all(t1); buildAngleTable(); const keep = mapData; update(); mapData = keep; drawMap();
+  });
+}
+function runMap() {
+  const loop = S.floop, grid = D.grid_deg, n = grid.length, out = grid.map(() => new Array(n).fill(0));
+  const btn = $("map-run"); btn.disabled = true;
+  let i = 0;
+  const tick = () => {
+    for (let j = 0; j < n; j++) {
+      const st = { ...S, t2: S.t2.map((o) => ({ ...o })), t1: S.t1.map((o) => ({ ...o })) };
+      st.t2[loop] = all(grid[i]); st.t1[loop] = all(grid[j]);
+      out[i][j] = E.simulate(cfgFrom(st, true)).hist.at(-1).g3;
+    }
+    $("r-map").textContent = `Computing… ${Math.round(100 * (i + 1) / n)} %`;
+    i++;
+    if (i < n) setTimeout(tick, 0); else { mapData = out; mapLoop = loop; btn.disabled = false; drawMap(); }
+  };
+  setTimeout(tick, 0);
+}
+
+// ---------------- notes
+function notes() {
+  const oh = D.op_heating;
+  const items = [
+    `<b>Potentials and ladders:</b> exact 16×16 state-dependent potentials of each pair (843.222 nm, 1.393 G at 45° in x–y, rotating-arm extinction ratio 2×10³, handedness −1), ${N} levels per state; trap frequencies set so the θ = 0 |4,−4⟩ spacing equals the programmed −1 offsets (18.1 / 15.1 / 12.5 kHz).`,
+    `<b>AFP:</b> Wang's waveform, 3 ms, 8 µs DDS steps, propagated on the full two-ladder Hamiltonian (all sidebands and the carrier included); centres at k × offset above the θ = 0 carrier. The carrier Rabi frequency at the AFP power is not documented: 20 kHz follows Du's measured full-power value, 14 kHz reproduces Wang's |A| > 0.1 criterion.`,
+    `<b>Optical pumping:</b> σ⁻ along the field, ${oh.mean_photons.toFixed(2)} photons on average from |3,−3⟩ (exact branching ratios); each photon kicks every axis (absorption along the beam, dipole emission pattern). One pumping from n = 0 leaves the ground state with probability ${(100 * oh.p_leave_ground.x).toFixed(0)} / ${(100 * oh.p_leave_ground.y).toFixed(0)} / ${(100 * oh.p_leave_ground.z).toFixed(0)} % on x / y / z (${(100 * oh.p_leave_ground_3d).toFixed(0)} % in 3D).`,
+    `<b>Between pulses:</b> rotation ramps adiabatic; vibrational coherences dropped. Axes are coupled only through pumping recoil (mean-field; the exact 3D propagation agrees to 10⁻⁴).`,
+    `<b>Not included:</b> lattice Raman scattering during cooling, site-to-site inhomogeneity across the array, microwave power drifts, and the true polarization impurity of the pumping beam (the dark-state slider stands in for it). The start is thermal; the measured 0.96 (Du) is reproduced at about 5.8 µK, or at 5 µK with about 0.8 % dark-state scatter per pumping.`,
+  ];
+  $("assume").innerHTML = items.map((t) => `<li>${t}</li>`).join("");
+}
+
+buildControls(); notes(); update();
+let rt = null;
+new ResizeObserver(() => { clearTimeout(rt); rt = setTimeout(() => { drawCycle(); drawFinal(); updateDetail(); drawMap(); }, 120); }).observe(document.querySelector(".wrap"));
+if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => update());
+new MutationObserver(() => update()).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>

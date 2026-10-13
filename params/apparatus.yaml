@@ -94,3 +94,15 @@ calibrations:
     value: "calibration_{F3,F4}_10kHz_ER316.csv in Transport-Optimizer"
     status: computed
     note: "ER316 = rotating-arm extinction ratio 316:1 (25 dB). The first-principles model reproduces the theta = 0 F3/F4 trap-frequency split (101.2 vs 101.1 Hz); see tests/test_lattice_potential.py. Mid-rotation residuals up to 0.13 um and 0.75 kHz near theta = pi/2 remain (figures/er316_comparison.png)."
+
+cooling:
+  sequence:
+    value: "per axis: -2 AFP at theta_-2 (2f above carrier, HSR -6 kHz), -1 AFP at theta_-1 (f above carrier), OP at theta = 0; loop 1 30 cycles at ~12/6 deg (-1 HSR -4 kHz), loop 2 10 cycles at ~13/12 deg (-1 HSR -6 kHz); order x, y, z"
+    status: current
+    source: "Maarten, 2026-10-13 (angles approximate)"
+  afp_duration_ms: {value: 3, status: current}
+  reference_fc_Hz: {value: 56592433.1, status: current, note: "DDS reference; assumed to be the theta = 0 carrier"}
+  offset_minus1_kHz: {value: {x: 18.1, y: 15.1, z: 12.5}, status: current, note: "-2 offsets are 2x; full depth"}
+  omega0_carrier_kHz: {value: 20, status: open, source: "Du App. A (full power, transition unstated)"}
+  initial_temperature_uK: {value: 5, status: thesis, source: "Wu p.26"}
+  measured_3d_ground_fraction: {value: 0.96, status: thesis, source: "Du p.48"}
