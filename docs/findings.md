@@ -214,3 +214,19 @@ Consequences:
 **Acceptance against Du's 96 % (3D): not reproduced at the nominal inputs.** The model gives 97.9 % for the lab sequence. It reaches 96 % at T ≈ 5.8 µK, or at 5 µK with a dark-state scatter of ≈ 0.8 % per OP pulse (0.9674 at 0.5 %, 0.9559 at 1 %). Lattice Raman scattering, site inhomogeneity and microwave drifts are not modelled. Validation spectra are needed (data requests 21–24).
 
 **Explorer.** `tools/psc_explorer.html` (built by `scripts/psc_build_explorer.py`) runs the factorized model in the browser on the exported tables (`scripts/psc_export_explorer.py`). It reproduces the Python results to ≤ 2×10⁻⁴ for Ω₀ ≤ 20 kHz and 2×10⁻³ at 40 kHz (band truncation); the check is `node tools/check_engine.js`. Pipeline: `psc_build_ladders.py` (5 min) → `psc_pulse_tables.py` (4 min per Ω₀) → `psc_analysis.py` (5 min) → `figure_psc.py`, `psc_export_explorer.py` → `psc_build_explorer.py`.
+
+## 2026-10-13 — Comparison with the measured post-cooling excitation
+
+**Measurement (lab, current sequence).** Non-ground fraction 3.1 / 3.8 / 1.2 % on x / y / z, background 0.8 %, mostly spontaneous emission. Background-subtracted: 2.3 / 3.0 / 0.4 %, i.e. 3D ground fraction 0.944 (0.921 without subtraction). The model at nominal inputs (5 µK, no dark-state scatter) gives 0.35 / 1.19 / 0.57 % (Ω₀ = 20 kHz). **Acceptance test: failed at nominal inputs.** (`scripts/psc_measured_comparison.py`)
+
+**The axis pattern points to optical pumping, not the initial temperature.** A hotter start raises all three axes, with z between x and y, because z has the lowest trap frequency: at 8 µK the model gives 2.3 / 5.5 / 3.7 %. The measurement has z lowest. Dark-state scatter per OP pulse heats mainly x and y, because the OP beam lies in the x–y plane and the absorption kick has no z component. At 2 %/OP (20 kHz) the model gives 2.5 / 3.1 / 1.1 %, and at 1.5 %/OP 2.0 / 2.7 / 1.0 %. That matches x and y; z is still predicted 0.6–0.7 points too high. The same pattern would arise if the recoil per OP event is larger than modelled, for example from extra photons scattered before the atom reaches the dark state. An extra-OP-pulse test on cold atoms separates the two (data request 24).
+
+**Protocol under 1.5–2 % dark scatter per OP** (5 µK):
+
+| Ω₀ (kHz) | dark | lab 30+10 | 6/6° + 13/12°, 30+10 | lab 40+10 | 6/6° + 13/12°, 40+10 | lab 60+10 |
+|---|---|---|---|---|---|---|
+| 20 | 2 % | 0.934 | 0.942 | 0.941 | 0.946 | 0.942 |
+| 20 | 1.5 % | 0.945 | 0.953 | 0.952 | 0.957 | — |
+| 10 | 2 % | 0.927 | 0.940 | 0.937 | 0.946 | 0.942 |
+
+The loop-1 angle change still gains 0.8–1.3 points, mainly on y (3.1 → 2.5 %). The loop-1 optimum stays at θ₋₂ = 5–6°. Extra cycles now saturate: the lab sequence gives 0.940 / 0.943 / 0.944 after 50 / 60 / 70 cycles at 2 %/OP. Each 0.5 %/OP of dark-state scatter costs about 1.1 points of 3D ground fraction, so the OP darkness is the main lever if this hypothesis holds.
