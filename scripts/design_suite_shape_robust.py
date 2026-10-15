@@ -21,7 +21,8 @@ sloshing cost does not. Per-EOM slew (PAR split) is penalized above SLEW_CAP.
 
 Usage: python scripts/design_suite_shape_robust.py T_US [K] [SEED] [MAXITER]
 Writes data/suite_rs_K0.94_<T>_K<K>_s<seed>.json (coefficients and scores).
-Needs data/suite_harm_ERmeas133_h{-1,+1}.npz (built by score_suite.py).
+Uses data/suite_harm_ERmeas133_h{-1,+1}.npz (git-ignored; built on first use
+by score_suite.model_scenarios, ~3 min per handedness).
 """
 
 import json
@@ -75,10 +76,10 @@ def shape_splines():
     for name in STATES:
         frac, x, f = load_calibration("data/reference", name)
         out["cal"][name] = (CubicSpline(np.pi * frac, np.abs(x) * 1e-6), CubicSpline(np.pi * frac, f * 1e3))
+    from score_suite import model_scenarios     # builds the git-ignored cache when it is missing
     for h in (-1, 1):
-        d = np.load(f"data/suite_harm_ERmeas133_h{h:+d}.npz")
-        out[f"model_h{h:+d}"] = {n: (CubicSpline(d["theta"], d[f"x_{n}"]), CubicSpline(d["theta"], d[f"f_{n}"]))
-                                 for n in STATES}
+        scen = model_scenarios(h)
+        out[f"model_h{h:+d}"] = {n: scen[n] for n in STATES}
     return out
 
 

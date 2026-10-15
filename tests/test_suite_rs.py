@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from design_suite_shape_robust import slew_par, theta_of  # noqa: E402
 
 DESIGN = ROOT / "data" / "suite_rs_K0.94_2500_K12_s0.json"
+MODEL_CACHES = [ROOT / "data" / f"suite_harm_ERmeas133_h{h:+d}.npz" for h in (-1, 1)]
 
 
 def test_theta_of_endpoints_and_monotonic():
@@ -25,6 +26,9 @@ def test_theta_of_endpoints_and_monotonic():
     assert slew_par(th, 2500.0) < 6.0          # V/us per EOM, PAR (design: 5.65)
 
 
+@pytest.mark.skipif(not all(p.exists() for p in MODEL_CACHES),
+                    reason="needs data/suite_harm_ERmeas133_h-1.npz and _h+1.npz (git-ignored; score_suite.model_scenarios "
+                           "builds them in ~6 min)")
 def test_export_round_trip(tmp_path, monkeypatch):
     import export_suite_target as E
     from score_suite import read_pair, rise_end_index
