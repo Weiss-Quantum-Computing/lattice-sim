@@ -32,7 +32,9 @@ angle enters through the spacing lambda / (2 sin alpha).
 from dataclasses import dataclass, replace
 
 import numpy as np
+import scipy.sparse as sparse
 from scipy.linalg import eig_banded
+from scipy.sparse.linalg import eigsh
 
 from ..atom.ground_state import eigenlevels
 from ..constants import H, HBAR, KB, LATTICE_WAVELENGTH_M, MASS_CS
@@ -57,31 +59,57 @@ def b_in_pair_frame(axis, b_lab_gauss):
     return PAIR_FRAMES[axis] @ np.asarray(b_lab_gauss, float)
 
 
-def vibrational_levels(x, v_hz, n_levels=4, half_window_m=1.2e-6):
-    """Lowest vibrational levels of a 1D potential V(x)/h (Hz) on a uniform grid.
-
-    Returns (energies_hz, wavefunctions) with wavefunctions normalized on
-    the grid (sum |psi|^2 = 1), solved on +/- half_window_m around the
-    minimum with a banded 4th-order finite-difference kinetic operator.
-    """
+def _hamiltonian_window(x, v_hz, half_window_m):
+    """Window (lo, hi), kinetic coefficient and potential of the
+    finite-difference Hamiltonian on +/- half_window_m around the minimum."""
     x = np.asarray(x, float)
     v = np.asarray(v_hz, float)
     dx = x[1] - x[0]
     centre = int(np.argmin(v))
     half = int(np.ceil(half_window_m / dx))
     lo, hi = max(0, centre - half), min(x.size, centre + half + 1)
-    n = hi - lo
     c = HBAR / (2 * MASS_CS * dx**2) / (2 * np.pi)
+    return lo, hi, c, v[lo:hi]
+
+
+def _embed(x, lo, hi, vectors, n_levels):
+    psi = np.zeros((n_levels, np.asarray(x).size))
+    psi[:, lo:hi] = vectors.T
+    return psi / np.sqrt(np.sum(psi**2, axis=1))[:, None]
+
+
+def vibrational_levels(x, v_hz, n_levels=4, half_window_m=1.2e-6):
+    """Lowest vibrational levels of a 1D potential V(x)/h (Hz) on a uniform grid.
+
+    Returns (energies_hz, wavefunctions) with wavefunctions normalized on
+    the grid (sum |psi|^2 = 1), solved on +/- half_window_m around the
+    minimum with a fourth-order finite-difference kinetic operator. The
+    levels come from a sparse shift-invert Lanczos solve about a shift just
+    below the potential minimum (the kinetic stencil is positive
+    semidefinite, so no level lies below it);
+    ``vibrational_levels_banded`` is the LAPACK banded reference it is
+    tested against, about 50 x slower.
+    """
+    lo, hi, c, v = _hamiltonian_window(x, v_hz, half_window_m)
+    n = hi - lo
+    off1, off2 = np.full(n - 1, c * (-4.0 / 3.0)), np.full(n - 2, c * (1.0 / 12.0))
+    h = sparse.diags([off2, off1, c * 2.5 + v, off1, off2], [-2, -1, 0, 1, 2], format="csc")
+    # a fixed start vector makes ARPACK, and so every figure, repeat bit for bit
+    energies, vectors = eigsh(h, k=n_levels, sigma=v.min() - 1.0, which="LM", v0=np.ones(n))
+    order = np.argsort(energies)
+    return energies[order], _embed(x, lo, hi, vectors[:, order], n_levels)
+
+
+def vibrational_levels_banded(x, v_hz, n_levels=4, half_window_m=1.2e-6):
+    """Reference for ``vibrational_levels``: the LAPACK banded eigensolver."""
+    lo, hi, c, v = _hamiltonian_window(x, v_hz, half_window_m)
+    n = hi - lo
     band = np.zeros((3, n))
-    band[0] = c * 2.5 + v[lo:hi]
+    band[0] = c * 2.5 + v
     band[1, :-1] = c * (-4.0 / 3.0)
     band[2, :-2] = c * (1.0 / 12.0)
     energies, vectors = eig_banded(band, lower=True, select="i", select_range=(0, n_levels - 1))
-    psi = np.zeros((n_levels, x.size))
-    psi[:, lo:hi] = vectors.T
-    psi /= np.sqrt(np.sum(psi**2, axis=1))[:, None]
-    # sign convention: positive at the centre of mass of |psi|^2 for n = 0
-    return energies, psi
+    return energies, _embed(x, lo, hi, vectors, n_levels)
 
 
 def franck_condon(psi_a, psi_b):
@@ -142,16 +170,26 @@ def axis_levels(cfg: AxisConfig, b_lab_gauss, n_levels=4, grid_points=1201, half
     wavefunctions of each state along one axis, on a common grid."""
     model = StatePotential(cfg.pair(), cfg.b_local(b_lab_gauss), trap_frequency_hz=cfg.trap_frequency_hz)
     x = np.linspace(-half_width_m, half_width_m, grid_points)
+    potentials = model.potentials(states, x, cfg.theta)
     out = {}
     for state in states:
-        v = model.potential(state, x, cfg.theta)
+        v = potentials[state]
         e, psi = vibrational_levels(x, v, n_levels)
         out[state] = dict(x=x, v_hz=v, energies_hz=e, psi=psi,
                           x0_m=float(np.sum(x * psi[0] ** 2)))
     return out
 
 
-def spectrum(site: SiteConfig, states=(UPPER, LOWER), max_dn=2):
+def _levels_key(cfg, b, site, states):
+    """Hashable identity of one axis' level calculation (None: do not cache)."""
+    if callable(cfg.extinction_ratio):
+        return None
+    frame = None if cfg.frame is None else tuple(np.asarray(cfg.frame, float).ravel())
+    fields = tuple((k, v) for k, v in vars(cfg).items() if k != "frame")
+    return (fields, frame, tuple(b), site.n_levels, site.grid_points, site.grid_half_width_m, tuple(states))
+
+
+def spectrum(site: SiteConfig, states=(UPPER, LOWER), max_dn=2, cache=None):
     """Lines of the |upper> -> |lower> spectrum for the site configuration.
 
     Frequencies are microwave frequencies E(upper, n) - E(lower, n') of the
@@ -165,6 +203,10 @@ def spectrum(site: SiteConfig, states=(UPPER, LOWER), max_dn=2):
     quantum added) lies at -f_lower; dn = -1 lies at +f_upper. The carrier's
     own weight is the product over axes of the thermal diagonal terms, and
     each sideband carries the diagonal terms of the other two axes.
+
+    ``cache`` (a dict, optional) keeps each axis' vibrational levels between
+    calls, so a change of temperature recomputes nothing and a change of
+    one pair recomputes only that pair (the interactive explorer passes one).
     """
     upper, lower = states
     b = np.asarray(site.b_lab_gauss, float)
@@ -172,7 +214,14 @@ def spectrum(site: SiteConfig, states=(UPPER, LOWER), max_dn=2):
     zeeman = levels[upper][0] - levels[lower][0]
     per_axis, carrier_shift, carrier_weight, lines = {}, 0.0, 1.0, []
     for cfg in site.axes:
-        lv = axis_levels(cfg, b, site.n_levels, site.grid_points, site.grid_half_width_m, states)
+        key = None if cache is None else _levels_key(cfg, b, site, states)
+        lv = cache.get(key) if key is not None else None
+        if lv is None:
+            lv = axis_levels(cfg, b, site.n_levels, site.grid_points, site.grid_half_width_m, states)
+            if key is not None:
+                if len(cache) > 256:
+                    cache.clear()
+                cache[key] = lv
         e_u, e_l = lv[upper]["energies_hz"], lv[lower]["energies_hz"]
         fc = franck_condon(lv[upper]["psi"], lv[lower]["psi"])        # (n_lower, n_upper)
         f_u, f_l = float(e_u[1] - e_u[0]), float(e_l[1] - e_l[0])

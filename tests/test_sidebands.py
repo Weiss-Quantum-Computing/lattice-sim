@@ -127,3 +127,51 @@ def test_crossing_angle_scales_the_trap_frequency_at_fixed_depth():
     f1 = spectrum(with_alignment(site, "x", crossing_half_angle_deg=half + 0.1), max_dn=1)["axes"]["x"]["f_lower_hz"]
     a1 = 843.222e-9 / (2 * np.sin(np.deg2rad(half + 0.1)))
     assert f1 / f0 == pytest.approx(a0 / a1, rel=2e-3)
+
+
+def _nominal_x_potentials(theta=0.03 * np.pi):
+    from lattice_sim.fields.potential import StatePotential
+    from lattice_sim.spectra.sidebands import LOWER, UPPER
+    site = nominal_site()
+    cfg = site.axes[0]
+    model = StatePotential(cfg.pair(), cfg.b_local(site.b_lab_gauss), trap_frequency_hz=cfg.trap_frequency_hz)
+    return model, model.potentials((UPPER, LOWER), X, theta)
+
+
+def test_sparse_and_banded_solvers_agree_on_the_lattice_wells():
+    from lattice_sim.spectra.sidebands import LOWER, UPPER, vibrational_levels_banded
+    _, pots = _nominal_x_potentials()
+    psis = {}
+    for state in (UPPER, LOWER):
+        e, psi = vibrational_levels(X, pots[state], 13)
+        e_ref, psi_ref = vibrational_levels_banded(X, pots[state], 13)
+        assert np.max(np.abs(e - e_ref)) < 1e-6          # Hz, on ~20 kHz level spacings
+        assert np.allclose(np.abs(np.sum(psi * psi_ref, axis=1)), 1.0, atol=1e-9)
+        psis[state] = (psi, psi_ref)
+    fc = franck_condon(psis[UPPER][0], psis[LOWER][0])
+    fc_ref = franck_condon(psis[UPPER][1], psis[LOWER][1])
+    assert np.max(np.abs(fc - fc_ref)) < 1e-9
+
+
+def test_shared_diagonalization_matches_the_single_state_potentials():
+    from lattice_sim.spectra.sidebands import LOWER, UPPER
+    model, pots = _nominal_x_potentials()
+    for state in (UPPER, LOWER):
+        assert np.array_equal(pots[state], model.potential(state, X, 0.03 * np.pi))
+
+
+def test_spectrum_cache_reuses_levels_and_changes_nothing():
+    from dataclasses import replace
+    site = nominal_site()
+    cache = {}
+    first = spectrum(site, max_dn=1, cache=cache)
+    assert len(cache) == 3
+    plain = spectrum(site, max_dn=1)
+    assert first["carrier_shift_hz"] == pytest.approx(plain["carrier_shift_hz"], abs=1e-6)
+    assert np.allclose([l[2:] for l in first["lines"]], [l[2:] for l in plain["lines"]], rtol=1e-9, atol=1e-12)
+    warmer = spectrum(replace(site, temperature_k=2e-6), max_dn=1, cache=cache)
+    assert len(cache) == 3                               # temperature reuses every pair's levels
+    again = spectrum(replace(site, temperature_k=2e-6), max_dn=1)["lines"]
+    assert np.allclose([l[2:] for l in warmer["lines"]], [l[2:] for l in again], rtol=1e-9, atol=1e-12)
+    spectrum(with_alignment(site, "x", rotating_offset_m=10e-6), max_dn=1, cache=cache)
+    assert len(cache) == 4                               # one pair changed, one new entry
