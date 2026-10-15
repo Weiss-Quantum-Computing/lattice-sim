@@ -175,3 +175,37 @@ def test_spectrum_cache_reuses_levels_and_changes_nothing():
     assert np.allclose([l[2:] for l in warmer["lines"]], [l[2:] for l in again], rtol=1e-9, atol=1e-12)
     spectrum(with_alignment(site, "x", rotating_offset_m=10e-6), max_dn=1, cache=cache)
     assert len(cache) == 4                               # one pair changed, one new entry
+
+
+# spectrum() of the committed same-site model (e24b39b) at the nominal settings with 13 levels:
+# carrier shift, and per pair f(|4,-4>), f(|3,-3>), displacement, sideband / carrier for dn = +1, -1
+COMMITTED_NOMINAL_13 = dict(
+    carrier_shift_hz=-903.0699712707428,
+    x=(18938.062857300727, 18952.530947299827, -3.0570073898661374e-08, 0.19315436014100407, 0.07796746901259613),
+    y=(15925.810252182582, 15973.139854730365, 3.645377298910677e-08, 0.25547019658960823, 0.11984951212492896),
+    z=(12439.843271391092, 12474.053848631444, 3.351985202690597e-08, 0.20073052019868917, 0.11145748863560749),
+)
+
+
+def test_small_angle_spectrum_equals_the_committed_same_site_model():
+    """The large-angle model (tracked wells, neighbouring sites, adiabatic labels, eigenvalue-only
+    diagonalization) leaves the nominal spectrum unchanged: rounding of the 9 GHz eigenvalues only."""
+    from dataclasses import replace
+    sp = spectrum(replace(nominal_site(), n_levels=13), max_dn=1)
+    assert sp["carrier_shift_hz"] == pytest.approx(COMMITTED_NOMINAL_13["carrier_shift_hz"], abs=1e-5)
+    lines = collapse_lines(sp["lines"])
+    for ax in "xyz":
+        f_u, f_l, disp, plus, minus = COMMITTED_NOMINAL_13[ax]
+        a = sp["axes"][ax]
+        assert a["f_upper_hz"] == pytest.approx(f_u, abs=1e-5)
+        assert a["f_lower_hz"] == pytest.approx(f_l, abs=1e-5)
+        assert a["displacement_m"] == pytest.approx(disp, abs=1e-14)
+        assert lines[(ax, 1)][1] / sp["carrier_weight"] == pytest.approx(plus, rel=1e-8)
+        assert lines[(ax, -1)][1] / sp["carrier_weight"] == pytest.approx(minus, rel=1e-8)
+        assert a["dn_weights"][0] == pytest.approx(a["diagonal"], rel=1e-12)
+        assert a["dn_weights"][1] / a["dn_weights"][0] == pytest.approx(plus, rel=1e-8)   # per-pair ratio
+        assert a["dn_weights"][-1] / a["dn_weights"][0] == pytest.approx(minus, rel=1e-8)
+        assert list(a["diagonal_sites"]) == [0]                 # no neighbouring-site well within reach
+        assert a["levels"][(4, -4)]["x"].size == 1201           # the default grid
+    assert sp["carrier_weight_same_site"] == sp["carrier_weight"]
+    assert [l[:2] for l in sp["site_lines"]] == [(l[0], 0) for l in sp["lines"]]

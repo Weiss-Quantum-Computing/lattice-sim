@@ -66,6 +66,7 @@ NOMINAL_ALPHA_DEG = float(np.rad2deg(NOMINAL_HALF_ANGLE))
 GRADIENT_HALF_SPAN_M = 10e-6
 MAX_LEVELS = 60                  # vibrational levels kept per pair at the highest temperature
 DROPPED_POPULATION = 1e-3        # thermal population allowed above the last kept level
+TABLE_ROWS_SHOWN = 9             # per-pair table rows on screen; the rest scroll
 EXTENSIONS = ("explorer_microwave", "explorer_angle", "explorer_grid", "explorer_chain")
 
 
@@ -197,16 +198,31 @@ def needs_gradients(settings):
 def compute_gradients(settings, cache=None):
     """Carrier and f(|3,−3⟩) gradients across the lattice (Hz/µm) from the
     edited pair's arm offsets, taken along the chosen direction."""
+    site, axis, geom = gradient_geometry(settings)
+    g = gradients(site, axis, geom, GRADIENT_HALF_SPAN_M, cache=cache)
+    return {k: v * 1e-6 for k, v in g.items() if k != "centre"}
+
+
+def gradient_geometry(settings):
+    """(site with the edited pair at unit amplitudes, axis, PairGeometry) whose
+    centre site is the explorer's own centre site."""
     axis = settings["edited"]
     s = settings["pairs"][axis]
+    alpha = NOMINAL_HALF_ANGLE + np.deg2rad(s["dalpha_deg"])
+    so, ro = s["static_um"] * 1e-6, s["rotating_um"] * 1e-6
+    if settings["offset_dir"] == "fringe":
+        # the slider is the arm's distance from the atoms; an arm at alpha to the bisector whose
+        # axis moves by r along the fringes passes the atoms at r cos(alpha)
+        so, ro = so / np.cos(alpha), ro / np.cos(alpha)
     key = "offset_fringe_m" if settings["offset_dir"] == "fringe" else "offset_pol_m"
-    geom = PairGeometry(ArmGeometry(**{key: s["static_um"] * 1e-6}),
-                        ArmGeometry(**{key: s["rotating_um"] * 1e-6}))
+    geom = PairGeometry(ArmGeometry(**{key: so}), ArmGeometry(**{key: ro}), half_angle_rad=alpha)
     site = site_from(settings)
-    base = [replace(cfg, static_amplitude=1.0, rotating_amplitude=1.0) if cfg.axis == axis else cfg
-            for cfg in site.axes]
-    g = gradients(replace(site, axes=base), axis, geom, GRADIENT_HALF_SPAN_M, cache=cache)
-    return {k: v * 1e-6 for k, v in g.items() if k != "centre"}
+    # site_axis_config rescales the trap frequency from the nominal spacing to the geometry's,
+    # which site_from has already done: undo it here
+    base = [replace(cfg, static_amplitude=1.0, rotating_amplitude=1.0,
+                    trap_frequency_hz=cfg.trap_frequency_hz * cfg.spacing_m / _NOMINAL.axes[0].spacing_m)
+            if cfg.axis == axis else cfg for cfg in site.axes]
+    return replace(site, axes=base), axis, geom
 
 
 def zeeman_slope_hz_per_g(b_gauss, angle_deg=45.0, step_g=1e-4):
@@ -221,8 +237,17 @@ def zeeman_slope_hz_per_g(b_gauss, angle_deg=45.0, step_g=1e-4):
 
 
 def sideband_ratios(sp, axis):
+    """(Δn = +1, Δn = −1) strength over the carrier of one pair, from that pair's
+    own 1D weights; NaN when the pair has no carrier (wells apart at mid angles)."""
+    a = sp["axes"][axis].get("dn_weights")
+    if a is not None:
+        if a.get(0, 0.0) <= 0:
+            return float("nan"), float("nan")
+        return a.get(1, 0.0) / a[0], a.get(-1, 0.0) / a[0]
     lines = collapse_lines(sp["lines"], axis)
     w = sp["carrier_weight"]
+    if w <= 0:
+        return float("nan"), float("nan")
     return lines.get((axis, 1), (0.0, 0.0))[1] / w, lines.get((axis, -1), (0.0, 0.0))[1] / w
 
 
@@ -272,8 +297,10 @@ def spectrum_curve(sp, f_hz, width_hz):
 def _note(ax, text, where="top-left"):
     x = 0.01 if "left" in where else 0.99
     y = 0.98 if "top" in where else 0.02
+    # a translucent backing so curves under the note do not run through the text
     ax.text(x, y, text, transform=ax.transAxes, fontsize=7, color="#666666",
-            ha="left" if "left" in where else "right", va="top" if "top" in where else "bottom", zorder=5)
+            ha="left" if "left" in where else "right", va="top" if "top" in where else "bottom", zorder=5,
+            bbox=dict(boxstyle="square,pad=0.2", facecolor="white", edgecolor="none", alpha=0.75))
 
 
 def _finish(ax, xlabel, ylabel, title=None):
@@ -291,7 +318,7 @@ LINE_STRENGTH = "line strength"
 
 
 def draw_spectrum(fig, res, ref, width_hz, log=True, show_nominal=True, mode=None):
-    """The Spectrum tab. ``mode`` (an extension's fn(result, f_hz) -> (y, ylabel))
+    """The Spectrum tab. ``mode`` (an extension's fn(result, f_hz) -> (y, ylabel[, note]))
     replaces the line strength by another quantity on the same detuning axis."""
     fig.clear()
     ax = fig.add_subplot(111)
@@ -301,10 +328,13 @@ def draw_spectrum(fig, res, ref, width_hz, log=True, show_nominal=True, mode=Non
     f = np.linspace(-f_max, f_max, 8001)
     ylabel = "Line strength (undisplaced carrier at T = 0 = 1)"
     y = y_ref = None
+    mode_note = None
     if mode is not None:
-        y, ylabel_mode = mode(res, f)
+        out = mode(res, f)
+        y, ylabel_mode = out[:2]
         if y is not None:
             ylabel = ylabel_mode
+            mode_note = out[2] if len(out) > 2 else None
             y_ref = mode(ref_res, f)[0] if show_nominal else None
     if y is None:
         y = spectrum_curve(sp, f, width_hz)
@@ -316,12 +346,13 @@ def draw_spectrum(fig, res, ref, width_hz, log=True, show_nominal=True, mode=Non
     floor = 1e-5
     if log:
         ax.set_yscale("log")
-        ax.set_ylim(floor, 3.0 if mode is None else 1.5 * max(float(np.nanmax(y)), floor * 10))
+        ax.set_ylim(floor, 3.0 if mode is None else 4.0 * max(float(np.nanmax(y)), floor * 10))
     else:
-        ax.set_ylim(0, 1.12 * float(y.max()))
+        ax.set_ylim(0, 1.12 * max(float(np.nanmax(y)), 1e-12))
     ax.set_xlim(f[0] / 1e3, f[-1] / 1e3)
+    cw = sp["carrier_weight"]
     for (pair, dn), (off, wt) in sorted(collapse_lines(sp["lines"]).items()):
-        if abs(dn) != 1 or wt / sp["carrier_weight"] < (3 * floor if log else 0.01):
+        if abs(dn) != 1 or wt <= 0 or (cw > 0 and wt / cw < (3 * floor if log else 0.01)):
             continue
         fx = sp["carrier_shift_hz"] + off
         yy = float(np.interp(fx, f, y))
@@ -332,9 +363,16 @@ def draw_spectrum(fig, res, ref, width_hz, log=True, show_nominal=True, mode=Non
     _finish(ax, "Microwave detuning from the free-atom |4,−4⟩ → |3,−3⟩ line at the set field (kHz)",
             ylabel, "Microwave spectrum |4,−4⟩ → |3,−3⟩ at one lattice site")
     ax.legend(loc="upper right", fontsize=7, framealpha=0.85)
-    _note(ax, f"T = {res['temperature_k'] * 1e6:.2f} µK, {res['n_levels']} levels per pair\n"
-              f"line half-width {width_hz:.0f} Hz (display only)\n"
-              "labels: pair, quanta added (Δn)")
+    lines = [f"T = {res['temperature_k'] * 1e6:.2f} µK, {res['n_levels']} levels per pair",
+             mode_note if mode_note else f"line half-width {width_hz:.0f} Hz (display only)",
+             "labels: pair, quanta added (Δn)"]
+    for pair in PAIRS:
+        a = sp["axes"][pair]
+        if a.get("strength_in_lines", 1.0) < 0.5:
+            lines.append(f"{pair}: {100 * a['strength_in_lines']:.1f} % of its line strength in the carrier and "
+                         f"Δn = ±1; centroid {a['centroid_offset_hz'] / 1e3:+.0f} kHz "
+                         f"(rms {a['rms_width_hz'] / 1e3:.0f} kHz) from the carrier")
+    _note(ax, "\n".join(lines))
 
 
 def draw_wells(fig, res, pair):
@@ -492,7 +530,10 @@ def run_interactive(mainloop=True):
             self.table_rows = []         # (name, fn(sp, axis, result) -> float, format)
             self.spectrum_modes = {}     # name -> fn(result, f_hz) -> (y or None, ylabel)
             self.extensions = {}
-            self.grid_quantities = {}    # name -> fn(sp) -> float, per-site quantities for the grid view
+            # name -> fn(sp) -> float, per-site quantities for the grid view; called on the WORKER
+            # thread, so they must not touch Tk
+            self.grid_quantities = {}
+            self.quantity_listeners = []  # fn(name): a registered grid quantity changed meaning (e.g. new pulse)
             self.se = sys.modules[__name__]   # this module (PAIR_COLOURS, Param, compute, ...) for extensions
             self.ParamRow = ParamRow
             self.tk, self.ttk, self.labplot = tk, ttk, labplot
@@ -622,13 +663,18 @@ def run_interactive(mainloop=True):
             self.summary = ttk.Label(read, text="", justify="left")
             self.summary.pack(fill="x")
             cols = ("quantity", "x", "y", "z")
-            self.tree = ttk.Treeview(read, columns=cols, show="headings", height=7)
+            tree_row = ttk.Frame(read)
+            tree_row.pack(fill="x", pady=(4, 2))
+            self.tree = ttk.Treeview(tree_row, columns=cols, show="headings", height=7)
+            tree_bar = ttk.Scrollbar(tree_row, orient="vertical", command=self.tree.yview)
+            self.tree.configure(yscrollcommand=tree_bar.set)
+            tree_bar.pack(side="right", fill="y")
             self.tree.heading("quantity", text="per pair: current (nominal)")
             self.tree.column("quantity", width=290, anchor="w")
             for ax in PAIRS:
                 self.tree.heading(ax, text=f"{ax} pair")
                 self.tree.column(ax, width=150, anchor="e")
-            self.tree.pack(fill="x", pady=(4, 2))
+            self.tree.pack(side="left", fill="x", expand=True)
             self.grad_label = ttk.Label(read, text="", justify="left", font=small)
             self.grad_label.pack(fill="x")
             self.status = ttk.Label(root, text="", foreground="#666666", anchor="w", padding=(6, 2))
@@ -673,7 +719,7 @@ def run_interactive(mainloop=True):
 
         def add_table_row(self, name, fn, fmt="{:.3f}"):
             self.table_rows.append((name, fn, fmt))
-            self.tree.configure(height=len(self._core_rows()) + len(self.table_rows))
+            self.tree.configure(height=min(TABLE_ROWS_SHOWN, len(self._core_rows()) + len(self.table_rows)))
 
         def run_background(self, fn, done=None, progress=None):
             """Run fn(progress, cancelled) on the worker thread (after any queued spectrum).
@@ -684,6 +730,14 @@ def run_interactive(mainloop=True):
             handle.cancel = lambda: setattr(handle, "flag", True)
             self.jobs.put(("call", 0, (fn, done, progress, handle)))
             return handle
+
+        def quantity_changed(self, name):
+            """Tell the views that cache grid quantity ``name`` that its values changed."""
+            for fn in self.quantity_listeners:
+                try:
+                    fn(name)
+                except Exception:
+                    traceback.print_exc()
 
         def request_update(self):
             """Recompute the spectrum for the current settings (debounced)."""
@@ -833,38 +887,50 @@ def run_interactive(mainloop=True):
 
         def _poll(self):
             try:
-                while True:
+                self._poll_once()
+            finally:
+                self.root.after(60, self._poll)
+
+        def _poll_once(self):
+            while True:
+                try:
                     kind, gen, payload = self.results.get_nowait()
-                    if kind == "spectrum" and gen == self._gen:
-                        self.result = payload
-                        self.grads = None
-                        self._show_result()
-                    elif kind == "gradients" and gen == self._gen:
-                        self.grads = payload
-                        self._show_gradients()
-                    elif kind == "call_progress":
-                        fn, i, n = payload
-                        fn(i, n)
-                    elif kind == "call_done":
-                        fn, value = payload
-                        fn(value)
-                    elif kind == "scan_progress":
-                        self.scan_status.configure(text=f"{payload[0]} / {payload[1]}")
-                    elif kind == "scan":
-                        self.scan_btn.state(["!disabled"])
-                        if payload is None:
-                            self.scan_status.configure(text="stopped")
-                        else:
-                            self.scan_result = payload
-                            self.scan_status.configure(text=f"{payload['values'].size} points")
-                            self.p_scan.mark_dirty()
-                            self.p_scan.draw_if_visible()
-                    elif kind == "error":
-                        self.status.configure(text="calculation failed - see the console", foreground="#c60")
-                        print(payload, file=sys.stderr)
-            except queue.Empty:
-                pass
-            self.root.after(60, self._poll)
+                except queue.Empty:
+                    return
+                try:
+                    self._handle(kind, gen, payload)
+                except Exception:
+                    traceback.print_exc()
+                    self.status.configure(text="display failed - see the console", foreground="#c60")
+
+        def _handle(self, kind, gen, payload):
+            if kind == "spectrum" and gen == self._gen:
+                self.result = payload
+                self.grads = None
+                self._show_result()
+            elif kind == "gradients" and gen == self._gen:
+                self.grads = payload
+                self._show_gradients()
+            elif kind == "call_progress":
+                fn, i, n = payload
+                fn(i, n)
+            elif kind == "call_done":
+                fn, value = payload
+                fn(value)
+            elif kind == "scan_progress":
+                self.scan_status.configure(text=f"{payload[0]} / {payload[1]}")
+            elif kind == "scan":
+                self.scan_btn.state(["!disabled"])
+                if payload is None:
+                    self.scan_status.configure(text="stopped")
+                else:
+                    self.scan_result = payload
+                    self.scan_status.configure(text=f"{payload['values'].size} points")
+                    self.p_scan.mark_dirty()
+                    self.p_scan.draw_if_visible()
+            elif kind == "error":
+                self.status.configure(text="calculation failed - see the console", foreground="#c60")
+                print(payload, file=sys.stderr)
 
         def _close(self):
             self._scan_cancel = True
@@ -966,7 +1032,7 @@ def run_interactive(mainloop=True):
             return [
                 ("trap frequency of |3,−3⟩ (kHz)", lambda s, ax, r: s["axes"][ax]["f_lower_hz"] / 1e3, "{:.2f}"),
                 ("trap frequency of |4,−4⟩ (kHz)", lambda s, ax, r: s["axes"][ax]["f_upper_hz"] / 1e3, "{:.2f}"),
-                ("well separation x(|3,−3⟩) - x(|4,−4⟩) (nm)",
+                ("well separation, same site, x(|3,−3⟩) − x(|4,−4⟩) (nm)",
                  lambda s, ax, r: s["axes"][ax]["displacement_m"] * 1e9, "{:+.1f}"),
                 ("sideband / carrier, Δn = +1", lambda s, ax, r: sideband_ratios(s, ax)[0], "ratio"),
                 ("sideband / carrier, Δn = −1", lambda s, ax, r: sideband_ratios(s, ax)[1], "ratio"),

@@ -62,3 +62,16 @@ def test_gradients_vanish_along_the_fringes_for_a_polarization_offset():
     g = se.compute_gradients(s, cache={})
     assert g["carrier_hz_per_m_fringe"] == pytest.approx(0.0, abs=1e-6)
     assert abs(g["carrier_hz_per_m_pol"]) > 1.0
+
+
+@pytest.mark.parametrize("direction, dalpha", [("pol", 0.0), ("fringe", 0.0), ("fringe", 0.3)])
+def test_gradient_geometry_centre_is_the_explorer_site(direction, dalpha):
+    from lattice_sim.spectra.beams import spectra_along
+    s = se.default_settings()
+    s["offset_dir"] = direction
+    s["pairs"]["x"].update(static_um=10.0, rotating_um=-5.0, dalpha_deg=dalpha)
+    direct = se.compute(s)["sp"]
+    site, axis, geom = se.gradient_geometry(s)
+    centre = spectra_along(site, axis, geom, [np.zeros(3)])[0]
+    assert centre["axes"]["x"]["f_lower_hz"] == pytest.approx(direct["axes"]["x"]["f_lower_hz"], rel=1e-9)
+    assert centre["carrier_shift_hz"] == pytest.approx(direct["carrier_shift_hz"], abs=1e-6)

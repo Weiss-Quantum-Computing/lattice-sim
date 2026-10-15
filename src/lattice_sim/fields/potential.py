@@ -66,7 +66,7 @@ class StatePotential:
         intensity, spin = self.pair.intensity_and_spin(x, theta)
         light = (
             intensity[:, None, None] * self._scalar_op
-            + self.r_v * np.einsum("nk,kij->nij", spin, np.array(self._sigma))
+            + self.r_v * np.tensordot(spin, np.array(self._sigma), axes=1)
         )
         return self._h0[None] + self.u_unit_hz * light
 
