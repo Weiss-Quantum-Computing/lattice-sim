@@ -167,7 +167,7 @@ def test_spectrum_cache_reuses_levels_and_changes_nothing():
     first = spectrum(site, max_dn=1, cache=cache)
     assert len(cache) == 3
     plain = spectrum(site, max_dn=1)
-    assert first["carrier_shift_hz"] == pytest.approx(plain["carrier_shift_hz"], abs=1e-6)
+    assert first["carrier_shift_hz"] == pytest.approx(plain["carrier_shift_hz"], abs=1e-5)
     assert np.allclose([l[2:] for l in first["lines"]], [l[2:] for l in plain["lines"]], rtol=1e-9, atol=1e-12)
     warmer = spectrum(replace(site, temperature_k=2e-6), max_dn=1, cache=cache)
     assert len(cache) == 3                               # temperature reuses every pair's levels
@@ -192,13 +192,16 @@ def test_small_angle_spectrum_equals_the_committed_same_site_model():
     diagonalization) leaves the nominal spectrum unchanged: rounding of the 9 GHz eigenvalues only."""
     from dataclasses import replace
     sp = spectrum(replace(nominal_site(), n_levels=13), max_dn=1)
-    assert sp["carrier_shift_hz"] == pytest.approx(COMMITTED_NOMINAL_13["carrier_shift_hz"], abs=1e-5)
+    # 1e-4 Hz: the levels are eigenvalues of a 16 x 16 Hamiltonian with 9.19 GHz entries (float64
+    # resolution ~1e-6 Hz each), and threaded LAPACK differs run to run (Windows CI: 1.24e-5 Hz)
+    tol_hz = 1e-4
+    assert sp["carrier_shift_hz"] == pytest.approx(COMMITTED_NOMINAL_13["carrier_shift_hz"], abs=tol_hz)
     lines = collapse_lines(sp["lines"])
     for ax in "xyz":
         f_u, f_l, disp, plus, minus = COMMITTED_NOMINAL_13[ax]
         a = sp["axes"][ax]
-        assert a["f_upper_hz"] == pytest.approx(f_u, abs=1e-5)
-        assert a["f_lower_hz"] == pytest.approx(f_l, abs=1e-5)
+        assert a["f_upper_hz"] == pytest.approx(f_u, abs=tol_hz)
+        assert a["f_lower_hz"] == pytest.approx(f_l, abs=tol_hz)
         assert a["displacement_m"] == pytest.approx(disp, abs=1e-14)
         assert lines[(ax, 1)][1] / sp["carrier_weight"] == pytest.approx(plus, rel=1e-8)
         assert lines[(ax, -1)][1] / sp["carrier_weight"] == pytest.approx(minus, rel=1e-8)
