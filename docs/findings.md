@@ -185,6 +185,8 @@ Consequences:
 
 ## 2026-10-13 — Projection sideband cooling versus EO rotation
 
+*Correction 2026-10-15: this section assumed one Rabi frequency Ω₀/2π = 20 kHz for both AFP pulses. The lab drives them at 0.1425 W (−2) and 0.075 W (−1), i.e. 6.77 / 4.91 kHz; the numbers at the lab powers are in the 2026-10-15 section below. The values here remain correct for Ω₀ = 20 kHz (the rebuilt tables reproduce them to the quoted digits) and are kept as the sensitivity scan.*
+
 **Sequence modelled (lab, 2026-10-13).** Per axis and step: −2 AFP at θ₋₂, centred 2f above the θ = 0 carrier (sweep ±6 kHz); −1 AFP at θ₋₁, centred f above it (±4 kHz in loop 1, ±6 kHz in loop 2); optical pumping (OP) at θ = 0. Loop 1: 30 cycles at (θ₋₂, θ₋₁) = (12°, 6°); loop 2: 10 cycles at (13°, 12°). AFP 3 ms. Programmed −1 offsets 18.1 / 15.1 / 12.5 kHz (x / y / z) set the full-depth trap frequencies. Initial state thermal at 5 µK (Wu p.26), n̄ = 5.3 / 6.4 / 7.7.
 
 **Model** (`lattice_sim/cooling/`, `tests/test_cooling.py`). Per axis, the |4,−4⟩ and |3,−3⟩ ladders (50 levels) and their Franck–Condon (FC) overlaps come from the exact potentials (ER 2×10³, h = −1, 1.393 G at 45°). Each AFP (Wang Eq. 2.2, 8 µs DDS steps) is propagated on the full two-ladder Hamiltonian, so off-resonant carrier and sideband couplings, anharmonicity and the carrier shift with θ are included. The two pulses combine incoherently; ramps are adiabatic. OP: σ⁻ Markov chain with exact 6P₃/₂ F′ = 4 branching (15/7 = 2.14 photons from |3,−3⟩); each photon is absorbed along the beam ((x̂ + ŷ)/√2, assumed) and emitted with the π/σ dipole pattern; recoil matrices on the lattice eigenstates. The 3D population is propagated exactly (`simulate_3d`) and in a factorized form (`simulate_factorized`); they agree to 5×10⁻⁵ on the lab sequence (0.97903 vs 0.97908). Tests: piecewise AFP vs adaptive ODE (≤ 2×10⁻⁴), branching ratios (7/12, 7/15), mean photon number, kick matrices vs the analytic displaced-oscillator formula, Lamb–Dicke limit, 3D vs factorized.
@@ -217,6 +219,8 @@ Consequences:
 
 ## 2026-10-13 — Comparison with the measured post-cooling excitation
 
+*Correction 2026-10-15: computed at Ω₀ = 20 kHz for both pulses; see the 2026-10-15 section for the lab powers.*
+
 **Measurement (lab, current sequence).** Non-ground fraction 3.1 / 3.8 / 1.2 % on x / y / z, background 0.8 %, mostly spontaneous emission. Background-subtracted: 2.3 / 3.0 / 0.4 %, i.e. 3D ground fraction 0.944 (0.921 without subtraction). The model at nominal inputs (5 µK, no dark-state scatter) gives 0.35 / 1.19 / 0.57 % (Ω₀ = 20 kHz). **Acceptance test: failed at nominal inputs.** (`scripts/psc_measured_comparison.py`)
 
 **The axis pattern points to optical pumping, not the initial temperature.** A hotter start raises all three axes, with z between x and y, because z has the lowest trap frequency: at 8 µK the model gives 2.3 / 5.5 / 3.7 %. The measurement has z lowest. Dark-state scatter per OP pulse heats mainly x and y, because the OP beam lies in the x–y plane and the absorption kick has no z component. At 2 %/OP (20 kHz) the model gives 2.5 / 3.1 / 1.1 %, and at 1.5 %/OP 2.0 / 2.7 / 1.0 %. That matches x and y; z is still predicted 0.6–0.7 points too high. The same pattern would arise if the recoil per OP event is larger than modelled, for example from extra photons scattered before the atom reaches the dark state. An extra-OP-pulse test on cold atoms separates the two (data request 24).
@@ -230,3 +234,48 @@ Consequences:
 | 10 | 2 % | 0.927 | 0.940 | 0.937 | 0.946 | 0.942 |
 
 The loop-1 angle change still gains 0.8–1.3 points, mainly on y (3.1 → 2.5 %). The loop-1 optimum stays at θ₋₂ = 5–6°. Extra cycles now saturate: the lab sequence gives 0.940 / 0.943 / 0.944 after 50 / 60 / 70 cycles at 2 %/OP. Each 0.5 %/OP of dark-state scatter costs about 1.1 points of 3D ground fraction, so the OP darkness is the main lever if this hypothesis holds.
+
+## 2026-10-15 — Projection cooling at the lab microwave powers
+
+**Inputs.** The cooling block compiled by the Freq-Scan-GUI (`output/Coolscan-manifest.json`, written 2026-10-13: "cooling block, 240 pulses (30+10 cycles) … 0.075/0.1425 W; HSR -4000/-6000 Hz (-6000 2nd loop); AFP 3 ms") runs every −2 pulse at 0.1425 W (HSR −6 kHz) and every −1 pulse at 0.075 W (HSR −4 kHz in loop 1, −6 kHz in loop 2); the powers are the same in both loops (`p_m2`, `p_m1`; only `hsr_m1b` changes). The older `dds-control/scripts/DDScool.py:152-160, 271-285` (AFP block last updated 2015) uses the same two powers for the same two pulses (`AFPPower1` = 0.1425 W for −2, `AFPPower0` = 0.075 W for −1), but HSR −8 kHz on both pulses in loop 2; its `AFPPower2` = 0.48 W appears only in commented-out variants. The DDS calibration "0.306 corresponds to 0.12 ms Blackman pulse for f4new transition" (`Powerscan.py:317`, `Freqscan.py:337`; after the April 2022 power-supply change, previously 0.318 W) with the firmware's amplitude-shaped Blackman (power = powmax·w², `pulse.h:945`, area 0.42 T Ω) gives Ω/2π = 9.92 kHz at 0.306 W and, with Ω ∝ √P, **6.77 kHz for the −2 pulse and 4.91 kHz for the −1 pulse** (`cooling/afp.py`: `CAL_POWER_W`, `CAL_BLACKMAN_PI_S`, `BLACKMAN_AREA_FACTOR`, `LAB_POWER_W`, `rabi_from_power`). Assumption: the calibration, taken on trapped atoms, is the bare (coupling-1) value; at θ = 0 the ground-state carrier overlap is ≈ 1 (`CAL_IS_BARE_COUPLING`, data request 21). Tests: 0.306 W → 9.9206 kHz, a firmware-discretized Blackman (60 × 2 µs) at that Rabi frequency inverts a two-level atom (independent propagation), √P scaling, the manifest values, 8 µs AFP vs adaptive ODE at 4.91 kHz (`tests/test_cooling.py`). Not modelled: the firmware sweep covers κ = 8 µs (N − 1)/L = 0.9973 of the range and is centred −(1 − κ)·HSR = +16 Hz off the set frequency (−6 kHz sweep).
+
+The model now takes a Rabi frequency per pulse kind (`psc.StepLibrary`, `TableLibrary`; default: the lab values), and the tables are keyed by each pulse's own Rabi frequency. Sets (`psc.rabi_sets()`): the lab powers scaled by 0.25–4 (Rabi 0.5–2×, ratio Ω₋₂/Ω₋₁ = 1.38 fixed) and the previous uniform scan (both pulses at 10 / 14 / 20 / 40 kHz). The rebuilt uniform sets reproduce every number of the 2026-10-13 table (e.g. 0.9728 / 0.9767 / 0.9791 / 0.9623 for the lab sequence).
+
+**The AFP no longer saturates.** An isolated resonant line reaches 0.98 transfer for |A| ≥ 0.27 (−2 pulse, ±6 kHz) and |A| ≥ 0.30 (−1 pulse, ±4 kHz) at the lab powers, against 0.092 / 0.075 at 20 kHz. On x at 12° the −2 pulse transfers > 0.99 on 6 of the levels n = 2–29 (25 at 20 kHz); at 6° it transfers 0.33 / 0.66 / 0.86 / 0.95 for n = 2–5 (0.67 / 0.95 / 1.00 / 1.00 at 20 kHz) (`figures/psc_cooling.png` c). The transfer therefore follows the FC factor over most of the ladder; the 2026-10-13 statement that the AFP saturates almost everywhere holds only for Ω of about 14 kHz and above.
+
+**Predictions at the lab powers, 5 µK, 40 cycles** (`scripts/psc_analysis.py`, `data/psc_results.json`):
+
+| quantity | lab powers (6.77 / 4.91 kHz) | 20 kHz, both pulses (2026-10-13) |
+|---|---|---|
+| lab sequence (12/6°, 13/12°) | 0.9623 | 0.9791 |
+| non-ground x / y / z (%) | 0.65 / 2.12 / 1.03 | 0.35 / 1.19 / 0.57 |
+| loop 1 only ×40 / loop 2 only ×40 | 0.9600 / 0.9401 | 0.9781 / 0.9695 |
+| best, same angle on all axes | 0.9866 at (5/6°, 10/18°) | 0.9879 at (6/6°, 9/18°) |
+| best, per axis | 0.9883 | 0.9894 |
+| loop 1 at its optimum, loop 2 at 13/12° | 0.9859 (5/6°) | 0.9875 (6/6°) |
+| pulses centred on the actual lines | 0.9671 | 0.9830 |
+| after 30 / 50 / 60 cycles (lab angles) | 0.9195 / 0.9747 / 0.9792 | 0.9479 / 0.9857 / 0.9878 |
+| 3 / 4 / 6 / 7 µK, lab angles | 0.9960 / 0.9846 / 0.9296 / 0.8888 | 0.9984 / 0.9925 / 0.9569 / 0.9265 |
+| 3 / 4 / 6 / 7 µK, optimum | 0.9991 / 0.9955 / 0.9706 / 0.9474 | 0.9993 / 0.9962 / 0.9726 / 0.9497 |
+
+- **The loop-1 angle change is worth 2.4 points instead of 0.8.** Moving the loop-1 −2 angle from 12° to 5–6° (6/6° gives 0.9856) raises the 3D ground fraction from 0.9623 to 0.9859. Within 0.2 points of the loop-1 optimum, θ₋₂ = 4–6° and θ₋₁ = 6–8° or 11–20° (panel g). With the lab loop 1, loop 2 spans 0.929–0.964 over 9–20°. The best 40-cycle split is now 10 + 30 (0.9641; 30 + 10: 0.9623, 40 + 0: 0.9619, 0 + 40: 0.9571).
+- **The optimum is insensitive to the power, the lab angles are not** (panel i). At 0.25 / 0.5 / 1 / 2 / 4× the lab powers the lab sequence gives 0.9081 / 0.9447 / 0.9623 / 0.9714 / 0.9758, the optimum at each power 0.9781 / 0.9843 / 0.9866 / 0.9873 / 0.9874. The lab-power optimum (5/6°, 10/18°) gives 0.9840 / 0.9873 / 0.9876 at 0.5× / 2× / 20 kHz; the 20 kHz optimum (6/6°, 9/18°) gives 0.9859 at the lab powers.
+- The factorized and the exact 3D propagation now differ by 1.1×10⁻³ on the lab sequence (0.96234 vs 0.96343; 5×10⁻⁵ at 20 kHz). OP heating per event is unchanged (0.16 / 0.18 / 0.10).
+
+**Du's 96 % at the nominal inputs.** At the lab powers the lab sequence gives 0.9623 at 5 µK without dark-state scatter; 0.96 is reached at T = 5.08 µK, or at 5 µK with 0.10 %/OP dark-state scatter (20 kHz: 5.88 µK or 0.82 %/OP). The 3D number therefore agrees with Du at the nominal inputs once the lab powers are used; the per-axis pattern does not (below).
+
+**Measured per-axis excitation** (`scripts/psc_measured_comparison.py`, `data/psc_measured_comparison.json`; measured, background-subtracted 2.3 / 3.0 / 0.4 % on x / y / z, 3D 0.944). At 5 µK without dark scatter the model gives 0.65 / 2.12 / 1.03 %; at 6 µK 1.28 / 3.83 / 2.08 %. With dark-state scatter per OP, the best single value (rms over the three axes, 0.25 %/OP grid) is 1.0 %/OP: 1.76 / 3.10 / 1.33 %, rms deviation 0.62 points, with z predicted 0.9 points too high and x 0.5 points too low (20 kHz: 1.75 %/OP, 2.25 / 2.90 / 1.07 %, rms 0.39). The dark-scatter hypothesis therefore fits the axis pattern less well at the lab powers than at 20 kHz, and z remains the axis the model does not reproduce. **Acceptance against the per-axis measurement: failed**, at the lab powers as at 20 kHz.
+
+**Protocol under dark-state scatter, lab powers** (5 µK):
+
+| dark per OP | lab 30+10 | 6/6° + 13/12°, 30+10 | lab 40+10 | 6/6° + 13/12°, 40+10 | lab 60+10 |
+|---|---|---|---|---|---|
+| 1 % | 0.939 | 0.962 | 0.952 | 0.966 | 0.959 |
+| 1.5 % | 0.928 | 0.951 | 0.941 | 0.955 | 0.948 |
+| 2 % | 0.917 | 0.940 | 0.930 | 0.944 | 0.937 |
+
+The loop-1 change gains 2.2–2.3 points at every dark-scatter level (y: 3.1 → 1.7 % at 1 %/OP); the loop-1 optimum stays at θ₋₂ = 5° (θ₋₁ = 6° at 1 %/OP, 17° at 1.5–2 %/OP). Lowering θ₋₂ in loop 1 gains more than 20 extra cycles at the lab angles.
+
+**Not changed in this update.** The manifest's −1 offsets are X 18.5 (the centre of that file's 14.5–22.5 kHz X-offset scan) / Y 15.0 / Z 12.0 kHz and its reference fc = f4new = 56 593 570.0 Hz; the model keeps the 18.1 / 15.1 / 12.5 kHz offsets and 56 592 433.1 Hz of 2026-10-13 (`OFFSET_M1_HZ`, `params/apparatus.yaml`). The rotation angles are not in the manifest.
+
+**Explorer.** The selector lists the Rabi-frequency sets (lab powers first). A Python port of `tools/psc_engine.js` run on the exported tables reproduces `psc_analysis.py` to ≤ 1×10⁻⁴ for the lab-power sets, 1.7×10⁻⁴ at 20 kHz and 1.8×10⁻³ at 40 kHz (band truncation). `node tools/check_engine.js` (updated for named sets) was not run: there is no Node.js on the build machine. Runtimes on 2026-10-15 (4 cores, shared with two other jobs): `psc_build_ladders.py` 22 min, `psc_pulse_tables.py --workers 4` 26 min for the 9 sets (3240 tables), `psc_analysis.py` 25 min, `psc_measured_comparison.py` 4 min, `figure_psc.py` 9 s, export and build 6 s.

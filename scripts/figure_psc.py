@@ -3,14 +3,17 @@
 a  Franck-Condon factor |<3,-3,n-1|4,-4,n>|^2 (x axis) against n and theta;
 b  the same for Delta n = -2;
 c  AFP transfer of the -2 pulse |4,-4,n> -> |3,-3,n-2> on x at 6 and 12 deg
-   (Omega0 = 20 kHz, 3 ms, HSR -6 kHz), with the Franck-Condon factor;
+   (lab power 0.1425 W, Omega/2pi = 6.77 kHz, 3 ms, HSR -6 kHz), with the
+   Franck-Condon factor;
 d  outcome of one x step per level: clean (n -> n-1 without OP) for the lab
    loop 1 (12/6 deg) and for 6/6 deg;
 e  3D ground-state fraction against cycle: lab sequence and the model optimum
    (per-axis lab curves dashed); f  the last 15 cycles;
 g  final 3D ground fraction against the loop-1 angles (loop 2 at 13/12 deg);
-h  final 3D ground fraction against the initial temperature (Omega0 = 20 kHz);
-i  against the carrier Rabi frequency Omega0 (5 uK).
+h  final 3D ground fraction against the initial temperature;
+i  against the Rabi frequency of the -1 pulse (5 uK): lab powers scaled
+   together (Omega_-2 / Omega_-1 = 1.38) and both pulses at one Omega.
+Panels c-h use the lab per-pulse Rabi frequencies (6.77 / 4.91 kHz).
 
 Needs data/psc_ladders.npz, data/psc_pulses.npz, data/psc_results.json.
 Writes figures/psc_cooling.png. Usage: python scripts/figure_psc.py
@@ -18,25 +21,22 @@ Writes figures/psc_cooling.png. Usage: python scripts/figure_psc.py
 
 import json
 import os
-import sys
 from pathlib import Path
 
 import numpy as np
 
 os.chdir(Path(__file__).resolve().parents[1])
-sys.path.insert(0, str(Path("scripts").resolve()))
 
 import matplotlib.pyplot as plt  # noqa: E402
 
 from lattice_sim.cooling import psc  # noqa: E402
 from lattice_sim.viz.style import COLORS, DOUBLE_COLUMN_IN, apply  # noqa: E402
-from psc_analysis import sequence  # noqa: E402
 
 N_SHOW = 30
 
 
-def label(ax, s):
-    ax.text(-0.2, 1.04, s, transform=ax.transAxes, fontsize=8, fontweight="bold", va="bottom")
+def label(ax, s, x=-0.2):
+    ax.text(x, 1.04, s, transform=ax.transAxes, fontsize=8, fontweight="bold", va="bottom")
 
 
 if __name__ == "__main__":
@@ -45,12 +45,12 @@ if __name__ == "__main__":
     tables = dict(np.load(Path("data") / "psc_pulses.npz"))
     res = json.loads(Path("data/psc_results.json").read_text(encoding="utf-8"))
     op = psc.optical_pumping_model(ladders)
-    lib = psc.TableLibrary(ladders, tables, 20.0)
+    lib = psc.TableLibrary(ladders, tables, psc.LAB_SET)
     thetas = np.array(sorted(k[1] for k in ladders if k[0] == "x" and isinstance(k[1], float)))
     n = np.arange(N_SHOW)
 
     fig = plt.figure(figsize=(DOUBLE_COLUMN_IN, 6.2))
-    gs = fig.add_gridspec(3, 3, hspace=0.65, wspace=0.75)
+    gs = fig.add_gridspec(3, 3, hspace=0.7, wspace=0.85)
 
     # a, b: FC maps
     for col, k in ((0, 1), (1, 2)):
@@ -64,10 +64,10 @@ if __name__ == "__main__":
             ax.axhline(th, color="white", lw=0.6, ls=ls)
         ax.set_xlabel("initial level $n$")
         ax.set_ylabel(r"rotation $\theta$ (deg)")
-        ax.set_title(rf"$|\langle 3,-3,n{-k:+d}\,|\,4,-4,n\rangle|^2$, x", fontsize=7)
+        ax.set_title(rf"$|\langle 3,-3,n{-k:+d}\,|\,4,-4,n\rangle|^2$, x", fontsize=6, loc="right")
         cb = fig.colorbar(im, ax=ax, fraction=0.05, pad=0.02)
         cb.set_label("FC factor")
-        label(ax, "ab"[col])
+        label(ax, "ab"[col], -0.32)
 
     # c: AFP transfer of the -2 pulse vs FC
     ax = fig.add_subplot(gs[0, 2])
@@ -81,7 +81,7 @@ if __name__ == "__main__":
     ax.set_xlabel("initial level $n$")
     ax.set_ylabel(r"$P(n\to n-2)$, FC factor")
     ax.set_ylim(-0.02, 1.05)
-    ax.legend(fontsize=5.5, loc="center right")
+    ax.legend(fontsize=5, loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=2, columnspacing=0.8)
     label(ax, "c")
 
     # d: clean fraction per level, x step
@@ -98,7 +98,7 @@ if __name__ == "__main__":
 
     # e: ground fraction vs cycle
     ax = fig.add_subplot(gs[1, 1])
-    r20 = res["per_omega"]["20"]
+    r20 = res["per_set"][psc.LAB_SET]
     cyc = np.arange(len(r20["lab_history"]["ground_3d"]))
     ax.plot(cyc, r20["lab_history"]["ground_3d"], color=COLORS["red"], label="lab")
     b = r20["best_same"]
@@ -117,20 +117,22 @@ if __name__ == "__main__":
     ax.plot(cyc, r20["best_same_history"]["ground_3d"], "o-", ms=2, color=COLORS["blue"], label="optimum")
     ax.axvline(30, color=COLORS["grey"], lw=0.5)
     ax.axhline(0.96, color=COLORS["grey"], lw=0.5, ls=":")
-    ax.text(34.5, 0.957, "measured (Du)", fontsize=5.5, color=COLORS["grey"], va="top")
-    ax.text(30.5, 0.932, "loop 2", fontsize=5.5, color=COLORS["grey"])
+    ax.text(25.3, 0.962, "measured (Du)", fontsize=5.5, color=COLORS["grey"], va="bottom")
+    ax.text(30.5, 0.995, "loop 2", fontsize=5.5, color=COLORS["grey"], va="top")
     ax.set_xlim(25, 40.5)
-    ax.set_ylim(0.93, 1.0)
+    lo = min(r20["lab_history"]["ground_3d"][25], 0.96)
+    ax.set_ylim(np.floor((lo - 0.01) * 50) / 50, 1.0)
     ax.set_xlabel("cooling cycle")
     ax.set_ylabel("3D ground fraction")
-    ax.legend(fontsize=5.5, loc="upper left")
+    ax.legend(fontsize=5.5, loc="lower right")
     label(ax, "f")
 
     # f: loop-1 scan
     ax = fig.add_subplot(gs[2, 0])
     grid = np.array(res["grid_deg"])
     s1 = np.array(r20["scan_loop1"])
-    im = ax.pcolormesh(grid, grid, s1, cmap="cividis", vmin=0.95, vmax=0.99, shading="nearest", rasterized=True)
+    im = ax.pcolormesh(grid, grid, s1, cmap="cividis", vmin=s1.max() - 0.04, vmax=s1.max(), shading="nearest",
+                       rasterized=True)
     ax.plot(6, 12, "o", mfc="none", mec=COLORS["red"], ms=5, label="lab")
     i, j = np.unravel_index(np.argmax(s1), s1.shape)
     ax.plot(grid[j], grid[i], "x", color="white", ms=5, label="optimum")
@@ -141,32 +143,39 @@ if __name__ == "__main__":
     cb.set_label("3D ground fraction")
     label(ax, "g")
 
-    # g: sensitivity to T and Omega0
+    # h: sensitivity to the initial temperature (lab powers)
     ax = fig.add_subplot(gs[2, 1])
-    temps = np.array([3, 4, 5, 6, 7.0])
-    for kw, c, nm in (((12, 6, 13, 12), COLORS["red"], "lab"), ((6, 6, 9, 18), COLORS["blue"], "optimum")):
-        g = [psc.ground_3d_factorized(psc.simulate_factorized(
-            sequence(*kw), lib, op, p0=psc.initial_state(temperature_k=t * 1e-6))) for t in temps]
-        ax.plot(temps, g, "o-", ms=2.5, color=c, label=nm)
+    tr = res["temperature"]
+    b = tr["best_angles"]
+    for key, c, nm in (("lab", COLORS["red"], "lab angles"),
+                       ("best", COLORS["blue"], f"{b['t2a']:g}/{b['t1a']:g}°, {b['t2b']:g}/{b['t1b']:g}°")):
+        ax.plot(tr["T_uK"], tr[key], "o-", ms=2.5, color=c, label=nm)
     ax.axhline(0.96, color=COLORS["grey"], lw=0.5, ls=":")
     ax.set_xlabel(r"initial temperature ($\mu$K)")
     ax.set_ylabel("3D ground fraction")
     ax.legend(fontsize=5.5)
     label(ax, "h")
+    # i: sensitivity to the Rabi frequency
     ax = fig.add_subplot(gs[2, 2])
-    oms = np.array(res["omegas_khz"])
-    ax.plot(oms, [res["per_omega"][f"{o:g}"]["lab"] for o in oms], "o-", ms=2.5, color=COLORS["red"], label="lab")
-    ax.plot(oms, [res["cross"]["20"][f"{o:g}"] for o in oms], "o-", ms=2.5, color=COLORS["blue"], label="optimum at 20 kHz")
-    ax.plot(oms, [res["per_omega"][f"{o:g}"]["best_same_ground"] for o in oms], "s--", ms=2.5, mfc="none",
-            color=COLORS["teal"], label=r"optimum at each $\Omega_0$")
+    sets = res["sets"]
+    lab_names = [psc.set_name(x) for x in res["power_scales"]]
+    uni_names = [f"{o:g}" for o in res["uniform_khz"]]
+    for names, c, mk, tag in ((lab_names, COLORS["red"], "o", "lab ratio"),
+                              (uni_names, COLORS["teal"], "s", r"equal $\Omega$")):
+        x = [sets[nm]["1"] for nm in names]
+        ax.plot(x, [res["per_set"][nm]["lab"] for nm in names], mk + "-", ms=2.5, color=c, label=f"lab angles, {tag}")
+        ax.plot(x, [res["per_set"][nm]["best_same_ground"] for nm in names], mk + "--", ms=2.5, mfc="none",
+                color=c, label=f"optimum, {tag}")
+    ax.axvline(sets[psc.LAB_SET]["1"], color=COLORS["grey"], lw=0.5, ls=":")
     ax.set_xscale("log")
-    ax.set_xticks(oms)
-    ax.set_xticklabels([f"{o:g}" for o in oms])
+    ticks = [2.5, 5, 10, 20, 40]
+    ax.set_xticks(ticks)
+    ax.set_xticklabels([f"{t:g}" for t in ticks])
     ax.xaxis.set_minor_formatter(plt.NullFormatter())
     label(ax, "i")
-    ax.set_xlabel(r"carrier Rabi frequency $\Omega_0/2\pi$ (kHz)")
+    ax.set_xlabel(r"$-1$ pulse Rabi frequency $\Omega_{-1}/2\pi$ (kHz)")
     ax.set_ylabel("3D ground fraction")
-    ax.legend(fontsize=5.5)
+    ax.legend(fontsize=5, loc="lower right", handlelength=1.6)
 
     out = Path("figures") / "psc_cooling.png"
     fig.savefig(out, bbox_inches="tight")

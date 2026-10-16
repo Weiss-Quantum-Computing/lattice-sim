@@ -2,7 +2,8 @@
 (tools/psc_explorer.html): Franck-Condon factors and line positions on a
 0.5 deg grid, the AFP transfer matrices on a 1 deg grid (banded, uint16),
 optical-pumping heating matrices, and the reference results of
-psc_analysis.py.
+psc_analysis.py, for every Rabi-frequency set of ``psc.rabi_sets()`` (the lab
+per-pulse values first). Pulse keys are '{set}_{axis}_{theta:.1f}_{kind}_{hsr}'.
 
 Needs data/psc_ladders.npz, data/psc_pulses.npz, data/psc_results.json.
 Writes data/psc_explorer.json (git-ignored).
@@ -23,8 +24,16 @@ from lattice_sim.cooling import psc  # noqa: E402
 N = 50
 BAND = 3
 VARIANTS = ((2, -6e3), (1, -4e3), (1, -6e3))
-OMEGAS = (10.0, 14.0, 20.0, 40.0)
+SETS = psc.rabi_sets()
 PULSE_THETAS = np.arange(1.0, 20.01, 1.0)
+
+
+def set_label(name, om):
+    if name == psc.LAB_SET:
+        return f"lab powers: {om[2]:.2f} / {om[1]:.2f} kHz"
+    if name.startswith("lab_P"):
+        return f"lab powers ×{name[5:]}: {om[2]:.2f} / {om[1]:.2f} kHz"
+    return f"both {om[2]:g} kHz"
 
 
 def b64_u16(a):
@@ -53,7 +62,8 @@ if __name__ == "__main__":
     op = psc.optical_pumping_model(ladders)
     fc_thetas = sorted(k[1] for k in ladders if k[0] == "x" and isinstance(k[1], float))
     exp = dict(N=N, band=BAND, axes=list(psc.AXES), offsets=psc.OFFSET_M1_HZ, fc_thetas=fc_thetas,
-               pulse_thetas=PULSE_THETAS.tolist(), omegas=list(OMEGAS),
+               pulse_thetas=PULSE_THETAS.tolist(), omegas=list(SETS),
+               sets={name: dict(m2=om[2], m1=om[1], label=set_label(name, om)) for name, om in SETS.items()},
                variants=[f"{k}_{h:g}" for k, h in VARIANTS], fc={}, lines={}, pulses={}, heat={},
                initial_temperature_uK=psc.INITIAL_TEMPERATURE_K * 1e6)
     for axis in psc.AXES:
@@ -72,13 +82,12 @@ if __name__ == "__main__":
         exp["fc"][axis], exp["lines"][axis] = rows, lrows
         heat = op.mixed(axis, op.p_k)[:N, :N]
         exp["heat"][axis] = np.round(heat, 6).tolist()
-    for om in OMEGAS:
+    for name, om in SETS.items():
         for axis in psc.AXES:
             for th in PULSE_THETAS:
                 for kind, hsr in VARIANTS:
-                    key = f"{om:g}_{axis}_{th:.1f}_{kind}_{hsr:g}"
-                    t = np.asarray(tables[key], float)
-                    exp["pulses"][key] = b64_u16(banded(t, t.shape[0] // 2))
+                    t = np.asarray(tables[psc.table_key(om[kind], axis, th, kind, hsr)], float)
+                    exp["pulses"][f"{name}_{axis}_{th:.1f}_{kind}_{hsr:g}"] = b64_u16(banded(t, t.shape[0] // 2))
     exp["op"] = dict(mean_photons=float(np.arange(op.p_k.size) @ op.p_k),
                      p_k=np.round(op.p_k[:12], 6).tolist())
     exp["reference"] = {om: dict(lab=r["lab"], lab_g3=r["lab_history"]["ground_3d"],
@@ -86,9 +95,11 @@ if __name__ == "__main__":
                                  best_g3=r["best_same_history"]["ground_3d"],
                                  per_axis=r["best_per_axis"], per_axis_ground=r["best_per_axis_ground"],
                                  scan1=np.round(r["scan_loop1"], 5).tolist(), scan2=np.round(r["scan_loop2"], 5).tolist())
-                        for om, r in results["per_omega"].items()}
+                        for om, r in results["per_set"].items()}
     exp["grid_deg"] = results["grid_deg"]
     exp["op_heating"] = results["op_heating"]
+    exp["du_match"] = results["du_match"]
     out = Path("data") / "psc_explorer.json"
-    out.write_text(json.dumps(exp, separators=(",", ":")), encoding="utf-8")
+    with open(out, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(json.dumps(exp, separators=(",", ":")))
     print(f"wrote {out} ({out.stat().st_size / 1e6:.2f} MB)")

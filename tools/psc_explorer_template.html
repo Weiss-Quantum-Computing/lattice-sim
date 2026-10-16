@@ -95,7 +95,7 @@ ul.assume { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; color: var(-
   <div class="grid2">
     <div style="display:grid;gap:12px;min-width:0">
       <div class="row">
-        <label class="ctl" for="omega">Carrier Rabi frequency Ω₀/2π
+        <label class="ctl" for="omega">AFP peak Rabi frequency, −2 / −1 pulse
           <select id="omega"></select></label>
         <label class="ctl" for="temp">Initial temperature <span class="v" id="temp-v"></span>
           <input type="range" id="temp" min="2" max="8" step="0.5"></label>
@@ -209,7 +209,7 @@ const SVGNS = "http://www.w3.org/2000/svg";
 // ---------------- state
 const LAB = { cycles: [30, 10], hsr: [-4000, -6000],
   t2: [{ x: 12, y: 12, z: 12 }, { x: 13, y: 13, z: 13 }], t1: [{ x: 6, y: 6, z: 6 }, { x: 12, y: 12, z: 12 }] };
-const S = { omega: 20, T: D.initial_temperature_uK || 5, dark: 0, link: true, faxis: "x", floop: 0, ln: 6, stage: 1, fck: 2,
+const S = { omega: D.sets.lab ? "lab" : D.omegas[0], T: D.initial_temperature_uK || 5, dark: 0, link: true, faxis: "x", floop: 0, ln: 6, stage: 1, fck: 2,
   cycles: [...LAB.cycles], hsr: [...LAB.hsr], t2: LAB.t2.map((o) => ({ ...o })), t1: LAB.t1.map((o) => ({ ...o })) };
 let mapData = null, mapLoop = 0;
 
@@ -222,9 +222,9 @@ function labCfg(light) { return cfgFrom({ ...S, cycles: LAB.cycles, hsr: LAB.hsr
 // ---------------- controls
 function buildControls() {
   const om = $("omega");
-  for (const o of D.omegas) { const e = document.createElement("option"); e.value = o; e.textContent = o + " kHz"; om.appendChild(e); }
+  for (const o of D.omegas) { const e = document.createElement("option"); e.value = o; e.textContent = D.sets[o].label; om.appendChild(e); }
   om.value = S.omega;
-  om.onchange = () => { S.omega = Number(om.value); mapData = null; update(); };
+  om.onchange = () => { S.omega = om.value; mapData = null; update(); };
   const t = $("temp"); t.value = S.T; t.oninput = () => { S.T = Number(t.value); mapData = null; update(); };
   const d = $("dark"); d.value = S.dark; d.oninput = () => { S.dark = Number(d.value); mapData = null; update(); };
   $("link").onchange = (e) => { S.link = e.target.checked; if (S.link) syncLinked(); buildAngleTable(); update(); };
@@ -607,7 +607,7 @@ function drawMap() {
     const ref = D.reference[String(S.omega)];
     const isLabBase = S.T === (D.initial_temperature_uK || 5) && S.dark === 0 && S.cycles[0] === 30 && S.cycles[1] === 10 && S.hsr[0] === -4000 && S.hsr[1] === -6000;
     data = loop === 0 ? ref.scan1 : ref.scan2;
-    label = isLabBase ? `Precomputed at ${S.omega} kHz with the other loop at the lab angles.` : `Showing the precomputed map (other loop at lab angles, ${D.initial_temperature_uK || 5} µK); press Compute for the current settings.`;
+    label = isLabBase ? `Precomputed for ${D.sets[S.omega].label} with the other loop at the lab angles.` : `Showing the precomputed map (other loop at lab angles, ${D.initial_temperature_uK || 5} µK); press Compute for the current settings.`;
   } else label = `Computed for the current settings, loop ${loop + 1}.`;
   $("r-map").textContent = label;
   const grid = D.grid_deg, n = grid.length;
@@ -650,13 +650,14 @@ function runMap() {
 
 // ---------------- notes
 function notes() {
-  const oh = D.op_heating;
+  const oh = D.op_heating, du = (D.du_match || {}).lab || {};
+  const duT = du.T_uK == null ? "—" : du.T_uK.toFixed(1), duD = du.dark == null ? "—" : (100 * du.dark).toFixed(2);
   const items = [
     `<b>Potentials and ladders:</b> exact 16×16 state-dependent potentials of each pair (843.222 nm, 1.393 G at 45° in x–y, rotating-arm extinction ratio 2×10³, handedness −1), ${N} levels per state; trap frequencies set so the θ = 0 |4,−4⟩ spacing equals the programmed −1 offsets (18.1 / 15.1 / 12.5 kHz).`,
-    `<b>AFP:</b> Wang's waveform, 3 ms, 8 µs DDS steps, propagated on the full two-ladder Hamiltonian (all sidebands and the carrier included); centres at k × offset above the θ = 0 carrier. The carrier Rabi frequency at the AFP power is not documented: 20 kHz follows Du's measured full-power value, 14 kHz reproduces Wang's |A| > 0.1 criterion.`,
+    `<b>AFP:</b> Wang's waveform, 3 ms, 8 µs DDS steps, propagated on the full two-ladder Hamiltonian (all sidebands and the carrier included); centres at k × offset above the θ = 0 carrier. Peak bare Rabi frequencies from the lab powers (0.1425 W for −2, 0.075 W for −1, Coolscan manifest) and the DDS calibration (0.306 W = π for a 0.12 ms Blackman on |4,−4⟩ → |3,−3⟩, amplitude window, Rabi ∝ √power): ${D.sets.lab.m2.toFixed(2)} / ${D.sets.lab.m1.toFixed(2)} kHz. The calibration is assumed to be the bare (coupling-1) value. The other entries scale both powers, or put both pulses at one Rabi frequency (the sensitivity scan).`,
     `<b>Optical pumping:</b> σ⁻ along the field, ${oh.mean_photons.toFixed(2)} photons on average from |3,−3⟩ (exact branching ratios); each photon kicks every axis (absorption along the beam, dipole emission pattern). One pumping from n = 0 leaves the ground state with probability ${(100 * oh.p_leave_ground.x).toFixed(0)} / ${(100 * oh.p_leave_ground.y).toFixed(0)} / ${(100 * oh.p_leave_ground.z).toFixed(0)} % on x / y / z (${(100 * oh.p_leave_ground_3d).toFixed(0)} % in 3D).`,
     `<b>Between pulses:</b> rotation ramps adiabatic; vibrational coherences dropped. Axes are coupled only through pumping recoil (mean-field; the exact 3D propagation agrees to 10⁻⁴).`,
-    `<b>Not included:</b> lattice Raman scattering during cooling, site-to-site inhomogeneity across the array, microwave power drifts, and the true polarization impurity of the pumping beam (the dark-state slider stands in for it). The start is thermal; the measured 0.96 (Du) is reproduced at about 5.8 µK, or at 5 µK with about 0.8 % dark-state scatter per pumping.`,
+    `<b>Not included:</b> lattice Raman scattering during cooling, site-to-site inhomogeneity across the array, microwave power drifts, and the true polarization impurity of the pumping beam (the dark-state slider stands in for it). The start is thermal; at the lab powers the lab sequence gives the measured 0.96 (Du) at ${duT} µK, or at 5 µK with ${duD} % dark-state scatter per pumping.`,
   ];
   $("assume").innerHTML = items.map((t) => `<li>${t}</li>`).join("");
 }

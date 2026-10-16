@@ -1,8 +1,9 @@
-"""Tests for projection sideband cooling: AFP propagation, optical pumping,
-recoil and the 3D cycle."""
+"""Tests for projection sideband cooling: the DDS power -> Rabi calibration,
+AFP propagation, optical pumping, recoil and the 3D cycle."""
 
 import numpy as np
 import pytest
+from scipy.linalg import expm
 
 from lattice_sim.constants import H, HBAR, MASS_CS
 from lattice_sim.cooling import afp, psc
@@ -24,26 +25,80 @@ def toy_ladder(axis="x", f=18e3, d=40e-9, n=12, carrier=0.0):
     return psc.Ladder(axis, 0.0, e_u - e_u[0], e_l - e_l[0], psi_l @ psi_u.T, carrier, d), psi_u
 
 
+# ---------------------------------------------------------------- power -> Rabi
+def test_calibration_power_gives_the_blackman_pi_rabi_frequency():
+    """0.306 W is the pi power of a 0.12 ms Blackman (amplitude window, area
+    0.42 T): Omega / 2pi = 1 / (2 x 0.42 x 0.12 ms) = 9.92 kHz."""
+    assert afp.rabi_from_power(afp.CAL_POWER_W) == pytest.approx(0.5 / (0.42 * 0.12e-3), rel=1e-12)
+    assert afp.rabi_from_power(0.306) == pytest.approx(9.9206e3, abs=0.1)
+
+
+def test_firmware_blackman_at_the_calibration_power_is_a_pi_pulse():
+    """Independent check: propagate the DDS Blackman (M = 60 amplitude steps
+    of 2 us, w(k/M) for k = 1..M, pulse.h) on resonance at the calibrated
+    Rabi frequency; it must invert the two-level atom."""
+    m, dt = 60, 2e-6
+    k = np.arange(1, m + 1) / m
+    w = 0.42 - 0.5 * np.cos(2 * np.pi * k) + 0.08 * np.cos(4 * np.pi * k)
+    om = afp.rabi_from_power(0.306)
+    sx = np.array([[0, 1], [1, 0]], complex)
+    psi = np.array([1, 0], complex)
+    for wk in w:
+        psi = expm(-2j * np.pi * 0.5 * om * wk * sx * dt) @ psi
+    assert abs(psi[1]) ** 2 == pytest.approx(1.0, abs=1e-9)
+
+
+def test_rabi_frequency_scales_as_sqrt_power():
+    assert afp.rabi_from_power(4 * 0.075) == pytest.approx(2 * afp.rabi_from_power(0.075), rel=1e-12)
+    assert afp.rabi_from_power(0.0) == 0.0
+
+
+def test_lab_cooling_powers_and_rabi_frequencies():
+    """Coolscan manifest (2026-10-13): -2 pulse 0.1425 W, -1 pulse 0.075 W."""
+    assert afp.LAB_POWER_W == {2: 0.1425, 1: 0.075}
+    assert afp.LAB_OMEGA_HZ[2] == pytest.approx(6770.0, abs=1.0)
+    assert afp.LAB_OMEGA_HZ[1] == pytest.approx(4911.4, abs=1.0)
+    assert psc.lab_omega_hz() == pytest.approx(afp.LAB_OMEGA_HZ)
+    assert psc.lab_omega_hz(4.0)[1] == pytest.approx(2 * afp.LAB_OMEGA_HZ[1])
+
+
+def test_omega_per_kind_and_table_keys():
+    assert psc.omega_per_kind() == afp.LAB_OMEGA_HZ
+    assert psc.omega_per_kind(20e3) == {2: 20e3, 1: 20e3}
+    assert psc.omega_per_kind({2: 1.0, 1: 2.0}) == {2: 1.0, 1: 2.0}
+    sets = psc.rabi_sets()
+    assert sets["lab"][1] == pytest.approx(afp.LAB_OMEGA_HZ[1] / 1e3)
+    assert sets["20"] == {2: 20.0, 1: 20.0}
+    assert psc.table_key(20.0, "x", 6, 2, -6e3) == "20_x_6.0_2_-6000"     # unchanged format
+    assert psc.table_key(sets["lab"][1], "y", 12.0, 1, -4e3) == "4.911_y_12.0_1_-4000"
+
+
 # ---------------------------------------------------------------- AFP
+@pytest.mark.parametrize("omega", [20e3, afp.LAB_OMEGA_HZ[1]])
 @pytest.mark.parametrize("overlap,detuning", [(0.05, 0.0), (0.1, 0.0), (0.2, 2e3), (1.0, -3e3)])
-def test_piecewise_afp_matches_ode(overlap, detuning):
+def test_piecewise_afp_matches_ode(overlap, detuning, omega):
     """8 us piecewise-constant steps against the smooth waveform (adaptive ODE)."""
-    a = afp.two_level_transfer(overlap, detuning, -4e3, 20e3)
-    b = afp.two_level_transfer_ode(overlap, detuning, -4e3, 20e3)
+    a = afp.two_level_transfer(overlap, detuning, -4e3, omega)
+    b = afp.two_level_transfer_ode(overlap, detuning, -4e3, omega)
     assert a == pytest.approx(b, abs=2e-4)
 
 
 def test_afp_sweep_direction_does_not_matter_for_two_levels():
-    assert afp.two_level_transfer(0.08, 1e3, 6e3) == pytest.approx(afp.two_level_transfer(0.08, 1e3, -6e3), abs=1e-6)
+    for om in (20e3, afp.LAB_OMEGA_HZ[2]):
+        assert afp.two_level_transfer(0.08, 1e3, 6e3, om) == pytest.approx(
+            afp.two_level_transfer(0.08, 1e3, -6e3, om), abs=1e-6)
 
 
 def test_afp_misses_a_line_outside_the_sweep():
-    assert afp.two_level_transfer(1.0, 9e3, -6e3) < 1e-3
+    for om in (20e3, afp.LAB_OMEGA_HZ[2]):
+        assert afp.two_level_transfer(1.0, 9e3, -6e3, om) < 1e-3
 
 
-def test_ladder_pulse_is_unitary_and_drives_the_sideband():
+@pytest.mark.parametrize("omega", [20e3, None])
+def test_ladder_pulse_is_unitary_and_drives_the_sideband(omega):
+    """At 20 kHz and at the lab -1 Rabi frequency (omega None -> 4.91 kHz)."""
     lad, _ = toy_ladder()
-    t = psc.pulse_matrix(lad, 1, -4e3, 20e3, center_hz=lad.e_u[1] - lad.e_l[0])
+    t = psc.pulse_matrix(lad, 1, -4e3, omega, center_hz=lad.e_u[1] - lad.e_l[0])
     n = lad.e_u.size
     assert np.allclose(t.sum(axis=0), 1.0, atol=1e-10)
     # |4,-4,1> -> |3,-3,0> and |3,-3,0> -> |4,-4,1>

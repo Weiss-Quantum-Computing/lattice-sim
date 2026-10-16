@@ -12,7 +12,11 @@ One cooling step on axis a (lab sequence, 2026-10-13):
 
 A cycle is x, y, z; the lab runs 30 cycles with (theta_2, theta_1) ~ (12, 6)
 deg and the "-1" sweep +-4 kHz, then 10 cycles with ~ (13, 12) deg and both
-sweeps +-6 kHz. AFP pulses are 3 ms.
+sweeps +-6 kHz. AFP pulses are 3 ms, at 0.1425 W ("-2") and 0.075 W ("-1")
+in both loops (Freq-Scan-GUI Coolscan manifest), i.e. peak bare Rabi
+frequencies of 6.77 and 4.91 kHz from the DDS pi-power calibration
+(``afp.rabi_from_power``, ``afp.LAB_OMEGA_HZ``). The Rabi frequency is per
+pulse kind ({2: Omega_-2, 1: Omega_-1}); a scalar applies to both pulses.
 
 Model. Each axis is a 1D problem on the exact state-dependent potentials
 (``spectra.sidebands.axis_levels``): the two vibrational ladders, their
@@ -59,6 +63,47 @@ N_LEVELS = 50
 GRID_POINTS = 2401
 GRID_HALF_WIDTH_M = 1.6e-6
 CACHE = Path("data") / "psc_ladders.npz"
+# Rabi-frequency sets for the tables and analyses: the lab powers scaled by
+# P / P_lab (Rabi by sqrt), and a uniform (both pulses equal) sensitivity scan.
+LAB_POWER_SCALES = (0.25, 0.5, 1.0, 2.0, 4.0)
+UNIFORM_OMEGA_KHZ = (10.0, 14.0, 20.0, 40.0)
+LAB_SET = "lab"
+
+
+def omega_per_kind(omega_hz=None):
+    """{2: Omega_-2, 1: Omega_-1} in Hz: None gives the lab values, a scalar
+    the same value for both pulses, a dict is taken as is."""
+    if omega_hz is None:
+        return dict(afp.LAB_OMEGA_HZ)
+    if isinstance(omega_hz, dict):
+        return {2: float(omega_hz[2]), 1: float(omega_hz[1])}
+    return {2: float(omega_hz), 1: float(omega_hz)}
+
+
+def lab_omega_hz(power_scale=1.0):
+    """Lab per-pulse Rabi frequencies with every pulse power scaled by power_scale."""
+    return {k: float(afp.rabi_from_power(p * power_scale)) for k, p in afp.LAB_POWER_W.items()}
+
+
+def set_name(power_scale):
+    return LAB_SET if power_scale == 1.0 else f"lab_P{power_scale:g}"
+
+
+def rabi_sets():
+    """Named Rabi-frequency sets, name -> {kind: Omega/2pi (kHz)}: the lab
+    powers ('lab', 'lab_P0.25' .. 'lab_P4') and the uniform scan ('10' .. '40')."""
+    out = {set_name(s): {k: v / 1e3 for k, v in lab_omega_hz(s).items()} for s in LAB_POWER_SCALES}
+    out.update({f"{o:g}": {2: o, 1: o} for o in UNIFORM_OMEGA_KHZ})
+    return out
+
+
+def omega_tag(omega_khz):
+    """Table-key tag of a Rabi frequency in kHz (rounded to 1 Hz)."""
+    return f"{round(float(omega_khz), 3):g}"
+
+
+def table_key(omega_khz, axis, theta_deg, kind, hsr_hz):
+    return f"{omega_tag(omega_khz)}_{axis}_{theta_deg:.1f}_{kind}_{hsr_hz:g}"
 
 
 @dataclass
@@ -173,12 +218,15 @@ def ladder_at(ladders, axis, theta_deg):
 
 
 # ---------------------------------------------------------------- one pulse, one step
-def pulse_matrix(ladder: Ladder, kind, hsr_hz, omega0_hz=afp.OMEGA0_HZ, center_hz=None,
+def pulse_matrix(ladder: Ladder, kind, hsr_hz, omega0_hz=None, center_hz=None,
                  site_detuning_hz=0.0):
     """|U|^2 of one AFP on this ladder; kind is 1 or 2 (the "-1" or "-2"
     pulse), centred at kind x the programmed offset unless center_hz is given.
-    site_detuning_hz shifts this site's lines (e.g. a field or light-shift
-    offset)."""
+    omega0_hz is the peak bare Rabi frequency (default: the lab value of this
+    pulse kind). site_detuning_hz shifts this site's lines (e.g. a field or
+    light-shift offset)."""
+    if omega0_hz is None:
+        omega0_hz = afp.LAB_OMEGA_HZ[kind]
     center = kind * OFFSET_M1_HZ[ladder.axis] if center_hz is None else center_hz
     u = afp.afp_unitary(ladder.e_u, ladder.e_l, ladder.overlap, center, hsr_hz, omega0_hz,
                         ladder.carrier_shift_hz + site_detuning_hz)
@@ -238,8 +286,10 @@ def initial_state(n_levels=N_LEVELS, temperature_k=INITIAL_TEMPERATURE_K):
 class StepLibrary:
     """Caches the pulse matrices of a sequence."""
 
-    def __init__(self, ladders, omega0_hz=afp.OMEGA0_HZ, center_mode="programmed"):
-        self.ladders, self.omega0, self.center_mode = ladders, omega0_hz, center_mode
+    def __init__(self, ladders, omega_hz=None, center_mode="programmed"):
+        """omega_hz: None (lab per-pulse values), a scalar (both pulses) or
+        {2: Omega_-2, 1: Omega_-1}, peak bare Rabi frequencies in Hz."""
+        self.ladders, self.omega, self.center_mode = ladders, omega_per_kind(omega_hz), center_mode
         self.cache = {}
 
     def pulse(self, axis, kind, theta, hsr):
@@ -249,7 +299,7 @@ class StepLibrary:
             center = None
             if self.center_mode == "line":   # centre on the actual n=1 (or 2) -> 0 line
                 center = (lad.e_u[kind] - lad.e_l[0]) + lad.carrier_shift_hz
-            self.cache[key] = pulse_matrix(lad, kind, hsr, self.omega0, center)
+            self.cache[key] = pulse_matrix(lad, kind, hsr, self.omega[kind], center)
         return self.cache[key]
 
     def step(self, axis, loop: Loop):
@@ -334,16 +384,28 @@ def simulate_factorized(sequence, lib: StepLibrary, op: OpticalPumping, p0=None,
 
 class TableLibrary(StepLibrary):
     """Step library backed by precomputed pulse matrices
-    (scripts/psc_pulse_tables.py), keyed '{omega_kHz}_{axis}_{theta:.1f}_{kind}_{hsr}'."""
+    (scripts/psc_pulse_tables.py), keyed by ``table_key``:
+    '{omega_kHz}_{axis}_{theta:.1f}_{kind}_{hsr}' with each pulse's own Rabi
+    frequency. omega_khz: None (lab), a scalar, a {kind: kHz} dict or the
+    name of a set in ``rabi_sets()``."""
 
-    def __init__(self, ladders, tables, omega0_khz=afp.OMEGA0_HZ / 1e3):
-        super().__init__(ladders, omega0_khz * 1e3)
-        self.tables, self.om = tables, omega0_khz
+    def __init__(self, ladders, tables, omega_khz=None):
+        if isinstance(omega_khz, str):
+            omega_khz = rabi_sets()[omega_khz]
+        if omega_khz is None:
+            om_hz = None
+        elif isinstance(omega_khz, dict):
+            om_hz = {k: v * 1e3 for k, v in omega_khz.items()}
+        else:
+            om_hz = float(omega_khz) * 1e3
+        super().__init__(ladders, om_hz)
+        self.tables = tables
+        self.om = {k: v / 1e3 for k, v in self.omega.items()}
 
     def pulse(self, axis, kind, theta, hsr):
         key = (axis, kind, round(theta, 3), hsr)
         if key not in self.cache:
-            name = f"{self.om:g}_{axis}_{theta:.1f}_{kind}_{hsr:g}"
+            name = table_key(self.om[kind], axis, theta, kind, hsr)
             self.cache[key] = np.asarray(self.tables[name], float)
         return self.cache[key]
 

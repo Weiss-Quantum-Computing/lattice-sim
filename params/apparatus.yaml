@@ -103,6 +103,8 @@ cooling:
   afp_duration_ms: {value: 3, status: current}
   reference_fc_Hz: {value: 56592433.1, status: current, note: "DDS reference; assumed to be the theta = 0 carrier"}
   offset_minus1_kHz: {value: {x: 18.1, y: 15.1, z: 12.5}, status: current, note: "-2 offsets are 2x; full depth"}
-  omega0_carrier_kHz: {value: 20, status: open, source: "Du App. A (full power, transition unstated)"}
+  afp_power_W: {value: {minus2: 0.1425, minus1: 0.075}, status: current, source: "Freq-Scan-GUI output/Coolscan-manifest.json (2026-10-13), p_m2 / p_m1; same in both loops"}
+  mw_pi_power_calibration: {value: {power_W: 0.306, blackman_pi_ms: 0.12}, status: current, source: "dds-control scripts/Powerscan.py:317, Freqscan.py:337 (f4new = |4,-4> -> |3,-3>, after the April 2022 power-supply change; was 0.318 W)"}
+  afp_peak_rabi_kHz: {value: {minus2: 6.77, minus1: 4.91}, status: computed, note: "Blackman amplitude area 0.42 T (pulse.h:945), Rabi ~ sqrt(power); calibration taken as the bare (coupling-1) value (cooling/afp.py CAL_IS_BARE_COUPLING); replaces the 20 kHz of Du App. A used until 2026-10-15"}
   initial_temperature_uK: {value: 5, status: thesis, source: "Wu p.26"}
   measured_3d_ground_fraction: {value: 0.96, status: thesis, source: "Du p.48"}

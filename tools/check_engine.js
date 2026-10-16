@@ -6,8 +6,8 @@ const d = JSON.parse(fs.readFileSync("data/psc_explorer.json", "utf8"));
 const e = new PSC(d);
 const all = (v) => ({ x: v, y: v, z: v });
 const out = {};
-for (const om of [10, 14, 20, 40]) {
-  const ref = d.reference[String(om)];
+for (const om of d.omegas) {
+  const ref = d.reference[om];
   const lab = e.simulate({ omega: om, T_uK: 5, loops: [
     { cycles: 30, t2: all(12), t1: all(6), hsr1: -4000 }, { cycles: 10, t2: all(13), t1: all(12), hsr1: -6000 }] });
   const b = ref.best;
