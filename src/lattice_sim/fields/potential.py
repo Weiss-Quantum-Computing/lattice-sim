@@ -66,19 +66,27 @@ class StatePotential:
         intensity, spin = self.pair.intensity_and_spin(x, theta)
         light = (
             intensity[:, None, None] * self._scalar_op
-            + self.r_v * np.einsum("nk,kij->nij", spin, np.array(self._sigma))
+            + self.r_v * np.tensordot(spin, np.array(self._sigma), axes=1)
         )
         return self._h0[None] + self.u_unit_hz * light
 
     def potential(self, state, x, theta):
         """Potential energy / h (Hz) of |F, m_F> along x at rotation theta."""
-        e_bias, v_bias = self._bias[state]
+        return self.potentials((state,), x, theta)[state]
+
+    def potentials(self, states, x, theta):
+        """{state: potential / h (Hz)} for several states from one diagonalization."""
         energies, vectors = np.linalg.eigh(self.hamiltonians(x, theta))
-        overlaps = np.abs(np.einsum("i,nij->nj", v_bias.conj(), vectors)) ** 2
-        index = np.argmax(overlaps, axis=1)
-        if overlaps[np.arange(len(index)), index].min() < 0.5:
-            raise RuntimeError(f"state {state} is strongly mixed; labels unreliable")
-        return energies[np.arange(len(index)), index] - e_bias
+        rows = np.arange(energies.shape[0])
+        out = {}
+        for state in states:
+            e_bias, v_bias = self._bias[state]
+            overlaps = np.abs(np.einsum("i,nij->nj", v_bias.conj(), vectors)) ** 2
+            index = np.argmax(overlaps, axis=1)
+            if overlaps[rows, index].min() < 0.5:
+                raise RuntimeError(f"state {state} is strongly mixed; labels unreliable")
+            out[state] = energies[rows, index] - e_bias
+        return out
 
     def minimum(self, state, theta, guess=0.0, half_window=None, n=801, fit_half_width=20e-9):
         """Trap minimum (m) and harmonic frequency (Hz) near ``guess``."""

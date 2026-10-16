@@ -124,24 +124,24 @@ def site_axis_config(base: AxisConfig, geometry: PairGeometry, r_local, spacing_
                    static_amplitude=a_s, rotating_amplitude=a_r, frame=frame)
 
 
-def spectra_along(site: SiteConfig, axis, geometry: PairGeometry, points_local, max_dn=1):
+def spectra_along(site: SiteConfig, axis, geometry: PairGeometry, points_local, max_dn=1, cache=None):
     """Spectrum of the site configuration at several positions (pair-local
     lab frame), with pair ``axis`` built from ``geometry`` at each one."""
     out = []
     for r in points_local:
         axes = [site_axis_config(cfg, geometry, r) if cfg.axis == axis else cfg for cfg in site.axes]
-        out.append(spectrum(replace(site, axes=axes), max_dn=max_dn))
+        out.append(spectrum(replace(site, axes=axes), max_dn=max_dn, cache=cache))
     return out
 
 
-def gradients(site: SiteConfig, axis, geometry: PairGeometry, half_span_m=10e-6):
+def gradients(site: SiteConfig, axis, geometry: PairGeometry, half_span_m=10e-6, cache=None):
     """Carrier and trap-frequency gradients (Hz/m) along the fringe direction
     and along the polarization direction, from sites +/- half_span_m from
     the centre, plus the centre spectrum."""
     pts = {"centre": np.zeros(3),
            "fringe+": np.array([half_span_m, 0, 0]), "fringe-": np.array([-half_span_m, 0, 0]),
            "pol+": np.array([0, 0, half_span_m]), "pol-": np.array([0, 0, -half_span_m])}
-    sp = dict(zip(pts, spectra_along(site, axis, geometry, pts.values())))
+    sp = dict(zip(pts, spectra_along(site, axis, geometry, pts.values(), cache=cache)))
     out = {"centre": sp["centre"]}
     for name in ("fringe", "pol"):
         plus, minus = sp[name + "+"], sp[name + "-"]

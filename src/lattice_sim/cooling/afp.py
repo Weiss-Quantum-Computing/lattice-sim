@@ -42,7 +42,7 @@ CAL_BLACKMAN_PI_S = 0.12e-3
 BLACKMAN_AREA_FACTOR = 0.42    # mean of the Blackman amplitude window (pulse.h:945-947)
 # ASSUMPTION: the calibration was taken on trapped atoms at theta = 0, where
 # the ground-state carrier overlap is ~1; it is used as the bare (coupling-1)
-# Rabi frequency. See data request 21.
+# Rabi frequency. See data request 26.
 CAL_IS_BARE_COUPLING = True
 # Cooling-pulse powers (Freq-Scan-GUI output/Coolscan-manifest.json,
 # 2026-10-13: "0.075/0.1425 W", p_m1 = 0.075, p_m2 = 0.1425; the same in

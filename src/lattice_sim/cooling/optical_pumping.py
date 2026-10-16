@@ -36,7 +36,7 @@ AXIS_DIRECTIONS = {"x": np.array([1.0, 0, 0]), "y": np.array([0, 1.0, 0]), "z": 
 # ASSUMPTION: probability per OP pulse that an atom already in |4,-4> scatters
 # from the polarization impurity of the OP beam (one pi excitation to
 # |4',-4> followed by re-pumping). Default 0; the measured value is open
-# (data request 20).
+# (data request 29).
 DARK_EXCURSION_PROB = 0.0
 
 
