@@ -38,3 +38,12 @@ values or guesses and are flagged in `scripts/p3_echo_analysis.py`.
 18. **Measured |4,−4⟩ → |3,−3⟩ spectra** (carrier and sidebands) for a few deliberate alignment changes: a known beam-centering offset, a crossing-angle change, the EOM rotation used for the sideband scan, and the lattice depth; with the measured temperature or n̄. *Enters as* the defaults of `scripts/sideband_explorer.py` (`nominal_site`) and validates the 1D-per-pair sideband model (`figures/sidebands_alignment.png`).
 19. **x₀(θ) or f(θ) of |3,−3⟩ at θ ≈ 0.4π and 0.6π.** Decides between the calibration and the first-principles shape of the transport path, which changes the predicted excitation of ramps faster than 3 ms by 10–100× (`figures/model_vs_calibration.png`, `scripts/score_suite.py`).
 20. **Carrier and sideband-frequency gradients across the lattice** (per plane along z, per column along x) at the current alignment, and after a known change of one arm's pointing. Decides whether an observed carrier gradient is a field gradient or a differential arm offset × ellipticity (`figures/tilt_gradients.png`); the sideband-frequency gradient gives the common beam offset directly.
+21. **Conditions of the microwave π-power calibration** (0.12 ms Blackman at 0.306 W on f4new): lattice on or off, and at which rotation and depth. With the lattice on, every modelled Rabi frequency is ~19 % high at nominal settings. *Enters as* `CAL_IS_BARE_ATOM` in `spectra/microwave.py`.
+22. **DDS update clock**: the actual word rate of the external clock on PFI4 (the compiler assumes 1 MHz). *Enters as* `UPDATE_CLOCK_HZ`; also whether the delivered power follows the `Pow2AmpWord` table (`POWER_CALIBRATION_EXACT`).
+23. **A measured AFP and Blackman sideband scan** (carrier + one sideband, with the pulse parameters and n̄), to test the explorer's "transfer probability (pulse)" view against the line-strength view.
+24. **Slice and site-map orientation**: how the camera's x, y (and plane index z) map onto the lattice pairs and the sign of each axis, so the grid view's maps can be drawn as the lab sees them.
+
+## F. Atom chain
+
+25. **The map pulses of the gate**: which qubit state (|3,−1⟩ or |4,+1⟩) is mapped onto the +x-moving transport state, and the time between the two legs (line-synchronous?). *Enters as* `PLUS_MOVER_QUBIT` in `gates/chain.py`; matters only when the legs differ. The scattering length (`DEFAULT_SCATTERING_A0`, item 14) and the transverse frequencies (`TRANSVERSE_HZ`, item 15) enter the chain the same way as Phase 4.
+

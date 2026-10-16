@@ -1,6 +1,6 @@
 """Figure: sensitivity of the |4,-4> -> |3,-3> carrier and sidebands to
 lattice alignment, one parameter at a time around the nominal sideband
-configuration (full depth, 3 % rotation, ER 3e4, 1.393 G at 45 deg, 5 uK).
+configuration (full depth, 3 % rotation, ER 3e4, 1.393 G at 45 deg, 1 uK; nominal_site() default).
 
 a  the nominal spectrum with the six first-order sidebands labelled;
 b  x trap frequency and x sideband ratio against the centering offset of
