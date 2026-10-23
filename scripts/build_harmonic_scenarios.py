@@ -11,6 +11,7 @@ import time
 
 import numpy as np
 
+from lattice_sim import cache
 from lattice_sim.atom.ground_state import magic_field
 from lattice_sim.fields.lattice_pair import LatticePair
 from lattice_sim.fields.potential import StatePotential
@@ -36,7 +37,8 @@ def main(pair_name):
                 model = StatePotential(LatticePair(extinction_ratio=er, handedness=h), b)
                 x0, f = model.track(state, thetas)
                 tag = f"harm_F{state[0]}m{state[1]:+d}_ER{er:g}_h{h:+d}"
-                np.savez(f"data/{tag}.npz", theta=thetas, x0_m=x0, f_hz=f)
+                cache.save(f"data/{tag}.npz", dict(state=list(state), er=er, handedness=h, b=b),
+                           theta=thetas, x0_m=x0, f_hz=f)
                 print(f"{tag}: x0(pi) {x0[-1]*1e6:+.3f} um, min f {f.min()/1e3:.2f} kHz "
                       f"({time.time()-started:.0f}s)", flush=True)
 

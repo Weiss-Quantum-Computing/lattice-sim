@@ -71,5 +71,7 @@ def main(directory):
 
 
 if __name__ == "__main__":
+    # a path argument is relative to where the script is started; resolve it before moving to the repo root
+    folder = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else None
     os.chdir(Path(__file__).resolve().parents[1])  # run from anywhere
-    main(sys.argv[1] if len(sys.argv) > 1 else "data/reference")
+    main(folder if folder is not None else "data/reference")

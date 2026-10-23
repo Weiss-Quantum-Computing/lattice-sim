@@ -19,11 +19,13 @@ harmonic calibration (trap minimum and frequency versus theta), so the two
 descriptions can be compared on identical numerics.
 """
 
+import json
 from dataclasses import dataclass
 
 import numpy as np
 from scipy.linalg import eig_banded
 
+from ..cache import inputs_record
 from ..constants import H, HBAR, MASS_CS
 
 
@@ -32,6 +34,7 @@ class PotentialTable:
     thetas: np.ndarray       # (n_theta,), rad, increasing
     x: np.ndarray            # (n_x,), m, uniform
     values_hz: np.ndarray    # (n_theta, n_x), V / h in Hz
+    inputs = None            # what a loaded table was built from (``save(inputs=)``), if recorded
 
     def at(self, theta):
         """V(x) / h at angle theta, linear interpolation between rows."""
@@ -48,13 +51,18 @@ class PotentialTable:
             values[k] = model.potential(state, x, theta)
         return cls(np.asarray(thetas, float), np.asarray(x, float), values)
 
-    def save(self, path):
-        np.savez_compressed(path, thetas=self.thetas, x=self.x, values_hz=self.values_hz)
+    def save(self, path, inputs=None):
+        """Write the table; ``inputs`` (a dict) records what it was built from
+        (``lattice_sim.cache.inputs_record``), read back as ``.inputs``."""
+        extra = {} if inputs is None else {"cache_inputs": np.array(inputs_record(inputs))}
+        np.savez_compressed(path, thetas=self.thetas, x=self.x, values_hz=self.values_hz, **extra)
 
     @classmethod
     def load(cls, path):
         data = np.load(path)
-        return cls(data["thetas"], data["x"], data["values_hz"])
+        table = cls(data["thetas"], data["x"], data["values_hz"])
+        table.inputs = json.loads(str(data["cache_inputs"])) if "cache_inputs" in data.files else None
+        return table
 
     @classmethod
     def harmonic(cls, center_of_theta, frequency_hz_of_theta, thetas, x):

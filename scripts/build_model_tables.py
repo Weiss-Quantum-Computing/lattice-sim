@@ -32,7 +32,8 @@ def main(er=316.0, n_theta=2881, trap_hz=10e3, out_dir="data", states=None):
         started = time.time()
         table = PotentialTable.from_model(model, state, thetas, x)
         tag = f"x_ER{er:g}_{trap_hz/1e3:g}kHz_F{state[0]}m{state[1]:+d}"
-        table.save(f"{out_dir}/{tag}.npz")
+        table.save(f"{out_dir}/{tag}.npz", inputs=dict(er=er, handedness=-1, trap_hz=trap_hz, b=b,
+                                                       state=list(state), n_theta=n_theta))
         print(f"{state}: moves {'+' if sign > 0 else '-'}, end {x_end[-1]*1e6:+.3f} um, "
               f"{time.time()-started:.0f}s -> {tag}.npz", flush=True)
 

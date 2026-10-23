@@ -5,9 +5,11 @@ Usage: python scripts/build_profile_tables.py ER_CSV HANDEDNESS STATE [STATE ...
 """
 
 import sys
+from pathlib import Path
 
 import numpy as np
 
+from lattice_sim import cache
 from lattice_sim.atom.ground_state import magic_field
 from lattice_sim.fields.extinction import ExtinctionProfile, read_rampol_er
 from lattice_sim.fields.lattice_pair import LatticePair
@@ -23,7 +25,9 @@ def main(path, handed, states):
         sign = 1 if state[1] > 0 or state[0] == 4 else -1
         table = PotentialTable.from_model(model, state, np.linspace(0, np.pi, 2881), grid_for_direction(sign))
         tag = f"x_ERmeas133_h{handed:+d}_10kHz_F{state[0]}m{state[1]:+d}"
-        table.save(f"data/{tag}.npz")
+        # the name says ERmeas133 whatever CSV was given: record which one (score_suite checks it)
+        table.save(f"data/{tag}.npz", inputs=dict(er_csv=Path(path).name, er_csv_digest=cache.file_digest(path),
+                                                  handedness=handed, b=b, state=list(state)))
         print("built", tag, flush=True)
 
 
