@@ -10,7 +10,7 @@ been established, and `docs/data_requests.md` for open inputs.
 
 ```
 python -m pip install -e ".[dev,viz]"   # once, in a venv (Windows, macOS, Linux)
-python -m pytest -q                     # ~5 s; must pass before every commit
+python -m pytest -q                     # ~3.5 min (200-220 s on the lab PC, Oct 2026); must pass before every commit
 python scripts/<name>.py [args]         # scripts chdir to the repo root; paths are repo-relative
 ```
 
@@ -19,7 +19,9 @@ Slow scripts (minutes): `build_model_tables.py`, `build_profile_tables.py`,
 (`data/*.npz`) are git-ignored caches; regenerate in this order when needed:
 `build_model_tables.py` → `build_harmonic_scenarios.py pm3|pm1` →
 `build_profile_tables.py` → analysis and figure scripts. Phase 4: `p4_collision.py` (~7 min) → `p4_overlap_check.py`, `p4_summary.py` → `figure_p4.py`.
-`data/pair_physics_m{1,3}.npz` is rebuilt automatically on first use (~30 s).
+`data/pair_physics_m{1,3}.npz` is rebuilt automatically on first use (~30 s), as are the
+`data/chain_tracks_*.npz` and `data/suite_*.npz` caches; each records the inputs it was built from
+(`lattice_sim.cache`) and is rebuilt when they change.
 
 ## Layout
 
@@ -36,7 +38,7 @@ Slow scripts (minutes): `build_model_tables.py`, `build_profile_tables.py`,
 - `scripts/design_suite_shape_robust.py` — suite-format rise robust to calibration and model shapes (exact Gaussian minimax, DE); `export_suite_target.py` writes it as an ILC target pair; `validate_suite_rs.py` checks it split-step on the full tables; `ramps/suite/` holds the exported targets (RS25).
 - `src/lattice_sim/viz/style.py` — the figure style; use `apply()` in new figure scripts.
 - `scripts/` — analyses and figures; `figures/` — committed outputs; `ramps/` — ramps in Transport-Optimizer CSV format for the experiment.
-- `params/apparatus.yaml` — apparatus parameters, each with `source` and `status` (current / thesis / computed / open).
+- `params/apparatus.yaml` — apparatus parameters, each with `source` and `status` (current / thesis / computed / open). It is the reference, but no code loads it: the values are literals in the modules (spacing 4.8374 µm in `fields/lattice_pair.py`, `gates/collision.py`, `gates/chain.py`, `spin/pair_physics.py`, `spectra/sidebands.py`, `spectra/grid.py`, `spectra/beams.py` and some scripts; waist 60 µm; full-depth trap frequencies 19 / 16 / 12.5 kHz in `sidebands.nominal_site`). Change a value in the yaml and in the code together; `tests/test_apparatus_constants.py` checks the main ones agree.
 - `data/reference/` — Transport-Optimizer calibration CSVs; `data/measured/` — lab measurements (e.g. ramp-polarimeter exports).
 
 ## Conventions
