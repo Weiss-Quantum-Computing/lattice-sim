@@ -372,10 +372,13 @@ def draw_ramsey(fig, res, scan, labplot):
 # ------------------------------------------------------------------ worker
 class Worker:
     """run_background(fn, done, progress) on a thread of our own (standalone use);
-    the same contract as the sideband explorer's App.run_background."""
+    the same contract as the sideband explorer's App.run_background. A job or
+    a done/progress callback that raises is printed and reported through
+    ``on_error(text)`` (on the Tk thread); polling always continues."""
 
-    def __init__(self, widget):
+    def __init__(self, widget, on_error=None):
         self.widget = widget
+        self.on_error = on_error
         self.jobs, self.results = queue.Queue(), queue.Queue()
         self.alive = True
         threading.Thread(target=self._run, daemon=True).start()
@@ -406,23 +409,38 @@ class Worker:
                 value = fn(report, lambda handle=handle: handle.flag)
             except Exception:
                 traceback.print_exc()
+                self.results.put((self._report_error, ("calculation failed - see the console",)))
                 continue
             if done is not None:
                 self.results.put((done, (value,)))
+
+    def _report_error(self, text):
+        if self.on_error is not None:
+            self.on_error(text)
 
     def _poll(self):
         if not self.alive:
             return
         try:
             while True:
-                fn, args = self.results.get_nowait()
-                fn(*args)
-        except queue.Empty:
-            pass
-        try:
-            self.widget.after(50, self._poll)
-        except Exception:
-            pass
+                try:
+                    fn, args = self.results.get_nowait()
+                except queue.Empty:
+                    break
+                try:
+                    fn(*args)
+                except Exception:
+                    # a drawing error in one callback must not stop every later result
+                    traceback.print_exc()
+                    try:
+                        self._report_error("display failed - see the console")
+                    except Exception:
+                        traceback.print_exc()
+        finally:
+            try:
+                self.widget.after(50, self._poll)
+            except Exception:
+                pass
 
 
 # ------------------------------------------------------------------ window
@@ -448,7 +466,8 @@ class ChainWindow:
         self.top.title("Atom chain: spin-echoed collisional gate - lattice-sim")
         self.worker = None
         if run_background is None:
-            self.worker = Worker(self.top)
+            self.worker = Worker(self.top, on_error=lambda text: self.status.configure(text=text,
+                                                                                       foreground="#c60"))
             run_background = self.worker.run_background
         self.run_background = run_background
         self.defaults = defaults

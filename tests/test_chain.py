@@ -224,3 +224,51 @@ def test_window_module_loads_and_maps_explorer_settings():
     assert d["spacing_m"] == pytest.approx(x.spacing_m)
     assert d["er"] == pytest.approx(3e4) and d["handedness"] == -1
     assert np.linalg.norm(d["b_vector"]) == pytest.approx(1.39304, abs=1e-5)
+
+
+def test_window_worker_keeps_polling_after_a_callback_error():
+    """chain_explorer.Worker: a raising done/progress callback is reported and the poll re-arms
+    (it used to stop, so the window showed 'computing' forever). No Tk: a fake widget."""
+    import importlib.util
+    import queue
+    import sys
+    scripts = Path(__file__).resolve().parents[1] / "scripts"
+    sys.path.insert(0, str(scripts))
+    try:
+        spec = importlib.util.spec_from_file_location("chain_explorer", scripts / "chain_explorer.py")
+        cx = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cx)
+    finally:
+        sys.path.remove(str(scripts))
+
+    class FakeWidget:
+        def __init__(self):
+            self.armed = []
+
+        def after(self, ms, fn):
+            self.armed.append(fn)
+
+    widget, errors, seen = FakeWidget(), [], []
+    worker = cx.Worker(widget, on_error=errors.append)
+    try:
+        def boom(value):
+            raise RuntimeError("drawing failed")
+        worker.results.put((boom, (1,)))
+        worker.results.put((seen.append, (2,)))
+        n_armed = len(widget.armed)
+        worker._poll()
+        assert seen == [2]                               # the result after the failing one still arrives
+        assert errors == ["display failed - see the console"]
+        assert len(widget.armed) == n_armed + 1          # re-armed
+        # a job that raises on the worker thread is reported too
+        done = queue.Queue()
+        worker.run_background(lambda progress, cancelled: 1 / 0, done.put)
+        for _ in range(200):
+            if not worker.results.empty():
+                break
+            import time
+            time.sleep(0.01)
+        worker._poll()
+        assert errors[-1] == "calculation failed - see the console" and done.empty()
+    finally:
+        worker.close()
