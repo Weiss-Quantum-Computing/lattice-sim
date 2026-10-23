@@ -52,10 +52,10 @@ from pathlib import Path
 import numpy as np
 
 from lattice_sim.atom.ground_state import eigenlevels
-from lattice_sim.constants import H, KB
 from lattice_sim.spectra.beams import NOMINAL_HALF_ANGLE, ArmGeometry, PairGeometry, gradients
-from lattice_sim.spectra.sidebands import (LOWER, UPPER, SiteConfig, amplitude_from_offset, collapse_lines,
-                                           line_shape, nominal_site, spacing_from_crossing, spectrum,
+from lattice_sim.spectra.sidebands import (DROPPED_POPULATION, LOWER, MAX_LEVELS, UPPER, WINDOW_EDGE_LIMIT,
+                                           SiteConfig, amplitude_from_offset, collapse_lines, line_shape,
+                                           n_levels_for, nominal_site, spacing_from_crossing, spectrum,
                                            thermal_weights)
 
 HERE = Path(__file__).resolve().parent
@@ -64,8 +64,8 @@ PAIRS = "xyz"
 WAIST_M = 60e-6
 NOMINAL_ALPHA_DEG = float(np.rad2deg(NOMINAL_HALF_ANGLE))
 GRADIENT_HALF_SPAN_M = 10e-6
-MAX_LEVELS = 60                  # vibrational levels kept per pair at the highest temperature
-DROPPED_POPULATION = 1e-3        # thermal population allowed above the last kept level
+# MAX_LEVELS, DROPPED_POPULATION and n_levels_for (the level count from the temperature) live in
+# lattice_sim.spectra.sidebands; the explorer reports the dropped population when the cap is reached
 TABLE_ROWS_SHOWN = 9             # per-pair table rows on screen; the rest scroll
 EXTENSIONS = ("explorer_microwave", "explorer_angle", "explorer_grid", "explorer_chain")
 
@@ -147,17 +147,6 @@ def copy_settings(s):
 _NOMINAL = nominal_site()
 
 
-def n_levels_for(temperature_k, trap_hz):
-    """Vibrational levels per pair so that at most DROPPED_POPULATION of the
-    thermal population lies above the last kept level (6 at least)."""
-    if temperature_k <= 0:
-        return 6
-    r = math.exp(-H * min(trap_hz) / (KB * temperature_k))
-    if r <= 0:
-        return 6
-    return int(min(MAX_LEVELS, max(6, math.ceil(math.log(DROPPED_POPULATION) / math.log(r)) + 1)))
-
-
 def site_from(settings):
     """SiteConfig of the settings (all three pairs, field, temperature)."""
     axes = []
@@ -188,6 +177,23 @@ def compute(settings, cache=None):
     return dict(settings=copy_settings(settings), sp=sp, n_levels=site.n_levels,
                 temperature_k=site.temperature_k, spacing_m={c.axis: c.spacing_m for c in site.axes},
                 seconds=time.perf_counter() - t0)
+
+
+def level_cut_note(res):
+    """Warning text when the level cut leaves more than DROPPED_POPULATION of the
+    thermal population out (only at the MAX_LEVELS cap), or the highest level
+    still touches the eigen-window at its size cap; '' otherwise."""
+    sp = res["sp"]
+    notes = []
+    dropped = sp.get("dropped_population", 0.0)
+    if dropped > DROPPED_POPULATION:
+        notes.append(f"{100 * dropped:.1f} % of the thermal population lies above level {res['n_levels']} "
+                     f"(cap {MAX_LEVELS}) and is left out")
+    edge = max(a.get("window_edge_fraction", 0.0) for a in sp["axes"].values())
+    if edge > WINDOW_EDGE_LIMIT:
+        notes.append(f"the highest levels reach the eigen-window edge (|ψ|² {edge:.0e} of peak): "
+                     "their energies are not converged")
+    return "; ".join(notes)
 
 
 def needs_gradients(settings):
@@ -364,6 +370,7 @@ def draw_spectrum(fig, res, ref, width_hz, log=True, show_nominal=True, mode=Non
             ylabel, "Microwave spectrum |4,−4⟩ → |3,−3⟩ at one lattice site")
     ax.legend(loc="upper right", fontsize=7, framealpha=0.85)
     lines = [f"T = {res['temperature_k'] * 1e6:.2f} µK, {res['n_levels']} levels per pair",
+             *([level_cut_note(res)] if level_cut_note(res) else []),
              mode_note if mode_note else f"line half-width {width_hz:.0f} Hz (display only)",
              "labels: pair, quanta added (Δn)"]
     for pair in PAIRS:
@@ -515,12 +522,15 @@ def run_interactive(mainloop=True):
             self.root = root
             self.settings = default_settings()
             self.cache = {}
+            # the nominal spectrum is the one model call on the Tk thread (before the worker starts and
+            # the window appears; ~0.3 s): every later one goes through the worker
             self.ref = compute(default_settings(), self.cache)
             self.result = self.ref
             self.grads = None
             self.scan_result = None
             self.slope = zeeman_slope_hz_per_g(1.39304)
             self._gen = 0
+            self._busy = None            # worker: 'scan' / 'extension calculation' while one runs
             self._scan_cancel = False
             self._after = None
             self._loading = False
@@ -824,7 +834,7 @@ def run_interactive(mainloop=True):
             if self._after is not None:
                 self.root.after_cancel(self._after)
             self._after = self.root.after(120, self._submit)
-            self.status.configure(text="computing ...")
+            self.status.configure(text=self._computing_text())
 
         def _pair_chosen(self):
             self._read_widgets()
@@ -850,7 +860,13 @@ def run_interactive(mainloop=True):
             self._after = None
             self._gen += 1
             self.jobs.put(("update", self._gen, copy_settings(self.settings)))
-            self.status.configure(text="computing ...")
+            self.status.configure(text=self._computing_text())
+
+        def _computing_text(self):
+            # one worker runs everything in order: a running scan or extension job (a lattice grid can
+            # take minutes) delays the spectrum until it finishes or is stopped
+            busy = self._busy
+            return "computing ..." + (f" (after the running {busy}; stop it to update sooner)" if busy else "")
 
         def _work(self):
             while True:
@@ -873,17 +889,21 @@ def run_interactive(mainloop=True):
                         def report(i, n, progress=progress):
                             if progress is not None:
                                 self.results.put(("call_progress", 0, (progress, i, n)))
+                        self._busy = "extension calculation"
                         value = fn(report, lambda handle=handle: handle.flag)
                         if done is not None:
                             self.results.put(("call_done", 0, (done, value)))
                     elif kind == "scan":
                         key, values = payload["key"], payload["values"]
+                        self._busy = "scan"
                         sc = scan(payload["settings"], key, values, self.cache,
                                   progress=lambda i, n: self.results.put(("scan_progress", gen, (i, n))),
                                   cancelled=lambda: self._scan_cancel)
                         self.results.put(("scan", gen, sc))
                 except Exception:
                     self.results.put(("error", gen, traceback.format_exc()))
+                finally:
+                    self._busy = None
 
         def _poll(self):
             try:
@@ -1023,8 +1043,9 @@ def run_interactive(mainloop=True):
                     traceback.print_exc()
             self._show_gradients()
             took = "from cache" if res["seconds"] < 0.01 else f"computed in {res['seconds']:.2f} s"
-            self.status.configure(text=f"{took}; {res['n_levels']} vibrational levels per pair",
-                                  foreground="#666666")
+            cut = level_cut_note(res)
+            self.status.configure(text=f"{took}; {res['n_levels']} vibrational levels per pair"
+                                  + (f"; {cut}" if cut else ""), foreground="#c60" if cut else "#666666")
             self.book.mark_dirty(["spectrum", "wells"])
             self.book.draw_visible()
 

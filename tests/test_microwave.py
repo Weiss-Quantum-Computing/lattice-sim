@@ -166,6 +166,8 @@ def test_scan_matches_line_by_line_sum(nominal_lines):
 
 def test_lines_reproduce_the_spectrum_weights(nominal_lines):
     sp, lines = nominal_lines
+    assert lines.kept_population > 0.998            # 13 levels per pair at 1 uK: states below 1e-5 dropped
+    lines = mw.lines_from_spectrum(sp, min_population=1e-9)
     assert lines.kept_population > 0.9999
     for (ax, dn), (off, wt) in collapse_lines(sp["lines"]).items():
         sel = (lines.axis == ax) & (lines.dn == dn)
@@ -190,7 +192,7 @@ def large_angle_lines(request):
     site = nominal_site()
     axes = [replace(c, theta=request.param * np.pi) if c.axis == "x" else c for c in site.axes]
     sp = spectrum(replace(site, axes=axes), max_dn=1)
-    return sp, mw.lines_from_spectrum(sp, max_dn=1)
+    return sp, mw.lines_from_spectrum(sp, max_dn=1, min_population=1e-9)
 
 
 def test_lines_reproduce_the_spectrum_weights_at_large_angle(large_angle_lines):

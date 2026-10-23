@@ -162,7 +162,7 @@ def test_shared_diagonalization_matches_the_single_state_potentials():
 
 def test_spectrum_cache_reuses_levels_and_changes_nothing():
     from dataclasses import replace
-    site = nominal_site()
+    site = replace(nominal_site(), n_levels=13)          # a fixed level count: temperature is free
     cache = {}
     first = spectrum(site, max_dn=1, cache=cache)
     assert len(cache) == 3
@@ -175,21 +175,110 @@ def test_spectrum_cache_reuses_levels_and_changes_nothing():
     assert np.allclose([l[2:] for l in warmer["lines"]], [l[2:] for l in again], rtol=1e-9, atol=1e-12)
     spectrum(with_alignment(site, "x", rotating_offset_m=10e-6), max_dn=1, cache=cache)
     assert len(cache) == 4                               # one pair changed, one new entry
+    # the level count from the temperature (n_levels None): 2 uK needs more levels, so it recomputes
+    auto, cache = nominal_site(), {}
+    spectrum(auto, max_dn=1, cache=cache)
+    spectrum(replace(auto, temperature_k=2e-6), max_dn=1, cache=cache)
+    assert len(cache) == 6
+
+
+def test_measured_extinction_profile_is_cached_by_its_values():
+    from dataclasses import replace
+    from lattice_sim.fields.extinction import ExtinctionProfile
+    prof = ExtinctionProfile(np.array([0.0, np.pi]), np.array([3e4, 2e3]), np.array([False, False]))
+    site = nominal_site()
+    site = replace(site, axes=[replace(c, extinction_ratio=prof) for c in site.axes])
+    cache = {}
+    first = spectrum(site, max_dn=1, cache=cache)
+    assert len(cache) == 3                               # was not cached at all (callable)
+    same = ExtinctionProfile(prof.theta.copy(), prof.er.copy(), prof.lower.copy())
+    again = spectrum(replace(site, axes=[replace(c, extinction_ratio=same) for c in site.axes]), max_dn=1,
+                     cache=cache)
+    assert len(cache) == 3 and again["carrier_shift_hz"] == first["carrier_shift_hz"]
+    other = ExtinctionProfile(prof.theta.copy(), np.array([3e4, 1e3]), prof.lower.copy())
+    spectrum(replace(site, axes=[replace(c, extinction_ratio=other) for c in site.axes]), max_dn=1, cache=cache)
+    assert len(cache) == 6                               # different values: new levels
+    lam = replace(site, axes=[replace(c, extinction_ratio=lambda th: 3e4) for c in site.axes])
+    spectrum(lam, max_dn=1, cache=cache)
+    assert len(cache) == 6                               # another callable: not cached
+
+
+def test_thermal_weights_use_the_computed_level_energies():
+    from lattice_sim.constants import KB
+    from lattice_sim.spectra.sidebands import (dropped_population, thermal_weights_from_energies)
+    e = np.array([0.0, 10e3, 19.5e3, 28.5e3])             # an anharmonic ladder (Hz)
+    w = thermal_weights_from_energies(e + 123.0, 2e-6)
+    beta = H / (KB * 2e-6)
+    assert w == pytest.approx(np.exp(-beta * e) / np.sum(np.exp(-beta * e)), rel=1e-12)
+    assert thermal_weights_from_energies(e, 0.0).tolist() == [1.0, 0.0, 0.0, 0.0]
+    # a harmonic ladder: the estimate of the population above the last level is exact (r^n)
+    f, n, temp = 10e3, 8, 3e-6
+    r = np.exp(-H * f / (KB * temp))
+    assert dropped_population(f * np.arange(n), temp) == pytest.approx(r ** n, rel=1e-9)
+    sp = spectrum(nominal_site(), max_dn=1)
+    x = sp["axes"]["x"]
+    e_u = x["levels"][(4, -4)]["energies_hz"]
+    assert x["thermal"] == pytest.approx(thermal_weights_from_energies(e_u, 1e-6), rel=1e-12)
+
+
+def test_level_count_follows_the_temperature():
+    """SiteConfig.n_levels None (the default) keeps <= 1e-3 of the thermal population above the
+    last level; the old fixed 6 levels put the x sideband / carrier ratio 45 % low at 5 uK."""
+    from dataclasses import replace
+    from lattice_sim.spectra.sidebands import DROPPED_POPULATION, MAX_LEVELS, n_levels_for, site_n_levels
+    assert site_n_levels(nominal_site()) == 13 == n_levels_for(1e-6, [19e3, 16e3, 12.5e3])
+    assert n_levels_for(0.0, [12.5e3]) == 6 and n_levels_for(30e-6, [5e3]) == MAX_LEVELS
+    warm = replace(nominal_site(), temperature_k=5e-6)
+    n = site_n_levels(warm)
+    auto = spectrum(warm, max_dn=1)
+    assert auto["n_levels"] == n and auto["dropped_population"] <= 3 * DROPPED_POPULATION
+    more = spectrum(replace(warm, n_levels=n + 15), max_dn=1)
+    six = spectrum(replace(warm, n_levels=6), max_dn=1)
+    ratio = {k: s["axes"]["x"]["dn_weights"][1] / s["axes"]["x"]["dn_weights"][0]
+             for k, s in (("auto", auto), ("more", more), ("six", six))}
+    assert ratio["auto"] == pytest.approx(ratio["more"], rel=5e-3)
+    assert ratio["six"] < 0.7 * ratio["auto"]                       # the old default's bias
+    assert six["dropped_population"] > 0.1
+
+
+def test_eigen_window_grows_for_high_levels_of_a_shallow_trap():
+    """z pair at 0.3 depth with 60 levels: the fixed +-1.2 um window moved E_59 by 4.8 kHz; the
+    window now grows until the top level is converged (equal to a window twice as large)."""
+    from dataclasses import replace
+    from lattice_sim.spectra.sidebands import (LEVEL_WINDOW_M, UPPER, WINDOW_EDGE_LIMIT, axis_levels)
+    site = nominal_site()
+    z = replace([c for c in site.axes if c.axis == "z"][0], trap_frequency_hz=12.5e3 * np.sqrt(0.3))
+    auto = axis_levels(z, site.b_lab_gauss, 60)
+    fixed = axis_levels(z, site.b_lab_gauss, 60, window_m=LEVEL_WINDOW_M)
+    wide = axis_levels(z, site.b_lab_gauss, 60, window_m=0.45 * z.spacing_m)      # the size cap, 2.18 um
+    assert auto[UPPER]["window_m"] > LEVEL_WINDOW_M
+    assert auto[UPPER]["edge_fraction"] <= WINDOW_EDGE_LIMIT < fixed[UPPER]["edge_fraction"]
+    e_auto, e_wide = auto[UPPER]["energies_hz"], wide[UPPER]["energies_hz"]
+    assert np.max(np.abs(e_auto - e_wide)) < 1e-3                  # Hz
+    assert fixed[UPPER]["energies_hz"][59] - e_wide[59] > 1e3       # the hard wall raised level 59
+    # where the default window suffices nothing changes
+    nominal = axis_levels(site.axes[0], site.b_lab_gauss, 13)
+    assert nominal[UPPER]["window_m"] == LEVEL_WINDOW_M
 
 
 # spectrum() of the committed same-site model (e24b39b) at the nominal settings with 13 levels:
-# carrier shift, and per pair f(|4,-4>), f(|3,-3>), displacement, sideband / carrier for dn = +1, -1
+# carrier shift, and per pair f(|4,-4>), f(|3,-3>), displacement, sideband / carrier for dn = +1, -1.
+# The sideband / carrier ratios are re-pinned for the thermal weights from the computed (anharmonic)
+# level energies (fixes 2026-10-15, G5-27); e24b39b's harmonic weights gave x 0.19315436014100407 /
+# 0.07796746901259613, y 0.25547019658960823 / 0.11984951212492896, z 0.20073052019868917 /
+# 0.11145748863560749. A regression pin of this code's own output, not an independent reference.
 COMMITTED_NOMINAL_13 = dict(
     carrier_shift_hz=-903.0699712707428,
-    x=(18938.062857300727, 18952.530947299827, -3.0570073898661374e-08, 0.19315436014100407, 0.07796746901259613),
-    y=(15925.810252182582, 15973.139854730365, 3.645377298910677e-08, 0.25547019658960823, 0.11984951212492896),
-    z=(12439.843271391092, 12474.053848631444, 3.351985202690597e-08, 0.20073052019868917, 0.11145748863560749),
+    x=(18938.062857300727, 18952.530947299827, -3.0570073898661374e-08, 0.19326072315186937, 0.07807708878268207),
+    y=(15925.810252182582, 15973.139854730365, 3.645377298910677e-08, 0.2556805949147516, 0.12007357618097064),
+    z=(12439.843271391092, 12474.053848631444, 3.351985202690597e-08, 0.2010717523937422, 0.11182130403275019),
 )
 
 
 def test_small_angle_spectrum_equals_the_committed_same_site_model():
     """The large-angle model (tracked wells, neighbouring sites, adiabatic labels, eigenvalue-only
-    diagonalization) leaves the nominal spectrum unchanged: rounding of the 9 GHz eigenvalues only."""
+    diagonalization) leaves the nominal spectrum unchanged: rounding of the 9 GHz eigenvalues only.
+    A regression pin (the e24b39b output), not a physics check."""
     from dataclasses import replace
     sp = spectrum(replace(nominal_site(), n_levels=13), max_dn=1)
     # 1e-4 Hz: the levels are eigenvalues of a 16 x 16 Hamiltonian with 9.19 GHz entries (float64

@@ -79,7 +79,19 @@ UPPER, LOWER = (4, -4), (3, -3)      # the stretched microwave transition
 
 # Large rotation angles (module docstring)
 SITE_OFFSETS = (-1, 0, 1)            # final-state sites, in lattice spacings from the atom's own site
-LEVEL_WINDOW_M = 1.2e-6              # half-width of the eigenvalue window around each well
+LEVEL_WINDOW_M = 1.2e-6              # half-width of the eigenvalue window around each well (starting value)
+WINDOW_EDGE_LIMIT = 1e-8             # |psi|^2 of the highest level at the window edge / its peak: above, the
+                                     # window grows (z pair, 0.3 depth, 60 levels: 4.5e-3 at 1.2 um moves
+                                     # E_59 by 4.8 kHz, 1.8e-6 moves E_45 by 0.5 Hz, 1e-11 moves nothing)
+WINDOW_GROWTH = 1.25                 # factor per enlargement
+WINDOW_MAX_SPACINGS = 0.45           # window half-width cap in lattice spacings (the barrier is at a/2)
+
+# Vibrational levels kept (``n_levels_for``): enough that at most DROPPED_POPULATION of the
+# thermal population lies above the last one, between MIN_LEVELS and MAX_LEVELS
+MIN_LEVELS = 6
+MAX_LEVELS = 60                      # cap; near it the levels approach the lattice barrier (0.3 depth,
+                                     # 5 uK, z pair: ~3 % above level 60, reported as dropped_population)
+DROPPED_POPULATION = 1e-3
 TRACK_MAX_STEP_RAD = np.pi / 24      # largest theta step of the well tracker; a well must move < a/2 per
                                      # step (fastest seen: x-pair |3,-3> next to 90 deg, ~0.9 um per step)
 TRACK_POINTS_PER_PERIOD = 64         # potential samples per lattice period in the tracker
@@ -176,6 +188,51 @@ def thermal_weights(f_hz, temperature_k, n_levels):
     r = np.exp(-H * f_hz / (KB * temperature_k))
     w = r ** np.arange(n_levels)
     return w / w.sum()
+
+
+def thermal_weights_from_energies(energies_hz, temperature_k):
+    """Boltzmann weights of levels at the given energies (Hz), normalized over them:
+    exp(-h (E_n - E_0) / kT), the anharmonic level spacing included."""
+    e = np.asarray(energies_hz, float)
+    if temperature_k <= 0:
+        w = np.zeros(e.size)
+        w[0] = 1.0
+        return w
+    w = np.exp(-H * (e - e[0]) / (KB * temperature_k))
+    return w / w.sum()
+
+
+def dropped_population(energies_hz, temperature_k):
+    """Thermal population above the last of the given levels, as a fraction of
+    the whole: the ladder continued geometrically with its top spacing (an
+    estimate; z pair at 0.3 depth, 5 uK, 60 levels: 3.03 % against 2.97 % from
+    a Boltzmann sum over 110 computed levels, tests/test_sideband_explorer.py)."""
+    e = np.asarray(energies_hz, float)
+    if temperature_k <= 0 or e.size < 2:
+        return 0.0
+    beta = H / (KB * temperature_k)
+    kept = float(np.sum(np.exp(-beta * (e - e[0]))))
+    r = float(np.exp(-beta * max(float(e[-1] - e[-2]), 0.0)))
+    if r >= 1.0:
+        return 1.0
+    tail = float(np.exp(-beta * (e[-1] - e[0]))) * r / (1.0 - r)
+    return tail / (kept + tail)
+
+
+def n_levels_for(temperature_k, trap_hz):
+    """Vibrational levels per pair so that at most DROPPED_POPULATION of the
+    thermal population of a harmonic ladder at the lowest of the trap
+    frequencies lies above the last kept level; at least MIN_LEVELS, at most
+    MAX_LEVELS (at the cap more is dropped: ``spectrum`` reports it)."""
+    if temperature_k <= 0:
+        return MIN_LEVELS
+    r = float(np.exp(-H * float(np.min(trap_hz)) / (KB * temperature_k)))
+    if r <= 0:
+        return MIN_LEVELS
+    if r >= 1:
+        return MAX_LEVELS
+    need = int(np.ceil(np.log(DROPPED_POPULATION) / np.log(r))) + 1
+    return int(min(MAX_LEVELS, max(MIN_LEVELS, need)))
 
 
 # ------------------------------------------------------- adiabatic potentials
@@ -315,19 +372,46 @@ class AxisConfig:
 
 @dataclass
 class SiteConfig:
-    """The three pairs, the bias field and the temperature at one site."""
+    """The three pairs, the bias field and the temperature at one site.
+
+    ``n_levels`` None (the default): chosen from the temperature and the
+    lowest trap frequency (``n_levels_for``); an int fixes it."""
     axes: list
     b_lab_gauss: np.ndarray
     temperature_k: float = 1e-6            # after Raman sideband cooling; n_bar ~ 0.4 at 19 kHz
-    n_levels: int = 6
+    n_levels: object = None
     grid_points: int = 1201
     grid_half_width_m: float = 1.5e-6
 
 
+def site_n_levels(site: SiteConfig):
+    """The level count a spectrum of the site uses (``SiteConfig.n_levels``)."""
+    if site.n_levels is not None:
+        return int(site.n_levels)
+    return n_levels_for(site.temperature_k, [cfg.trap_frequency_hz for cfg in site.axes])
+
+
+def _edge_fraction(psi_row):
+    """|psi|^2 at the outermost points of its support / its peak."""
+    nz = np.flatnonzero(psi_row)
+    if nz.size == 0:
+        return 0.0
+    p = psi_row ** 2
+    return float(max(p[nz[0]], p[nz[-1]]) / p.max())
+
+
 def axis_levels(cfg: AxisConfig, b_lab_gauss, n_levels=4, grid_points=1201, half_width_m=1.5e-6,
-                states=(UPPER, LOWER), site_offsets=None, window_m=LEVEL_WINDOW_M):
+                states=(UPPER, LOWER), site_offsets=None, window_m=None):
     """Vibrational energies (Hz, including the state's light shift) and
     wavefunctions of each state along one axis, on a common grid.
+
+    ``window_m`` is the half-width of the eigenvalue window around each
+    well. None (the default): LEVEL_WINDOW_M, enlarged by WINDOW_GROWTH
+    until the highest level's |psi|^2 at the window edge is below
+    WINDOW_EDGE_LIMIT of its peak (high levels of a low trap frequency
+    otherwise feel the window as a hard wall), at most WINDOW_MAX_SPACINGS
+    lattice spacings. Every state dict carries 'window_m' and
+    'edge_fraction' (the largest such ratio over its wells).
 
     Each state's well is followed from theta = 0 (``track_wells``). The grid
     has the spacing of ``linspace(-half_width_m, half_width_m, grid_points)``
@@ -342,6 +426,19 @@ def axis_levels(cfg: AxisConfig, b_lab_gauss, n_levels=4, grid_points=1201, half
     purity, sites)}; ``sites`` maps k to dict(psi, energies_hz, x0_m,
     x_min_m) of that well (k = 0 is the state's own well, the same arrays).
     """
+    if window_m is not None:
+        return _axis_levels(cfg, b_lab_gauss, n_levels, grid_points, half_width_m, states, site_offsets,
+                            window_m)
+    cap = WINDOW_MAX_SPACINGS * cfg.spacing_m
+    window = min(LEVEL_WINDOW_M, cap)
+    while True:
+        out = _axis_levels(cfg, b_lab_gauss, n_levels, grid_points, half_width_m, states, site_offsets, window)
+        if max(d["edge_fraction"] for d in out.values()) <= WINDOW_EDGE_LIMIT or window >= cap:
+            return out
+        window = min(cap, window * WINDOW_GROWTH)
+
+
+def _axis_levels(cfg, b_lab_gauss, n_levels, grid_points, half_width_m, states, site_offsets, window_m):
     model = cfg.model(b_lab_gauss)
     a = cfg.spacing_m
     if site_offsets is None:
@@ -371,12 +468,14 @@ def axis_levels(cfg: AxisConfig, b_lab_gauss, n_levels=4, grid_points=1201, half
         e, psi = vibrational_levels(x, v, n_levels, window_m, centre=centre)
         x_min, v_min = _parabola_min(x, v, centre)
         well = dict(psi=psi, energies_hz=e, x0_m=float(np.sum(x * psi[0] ** 2)), x_min_m=x_min)
+        edge = _edge_fraction(psi[-1])
         if k == 0:
             out[s] = dict(x=x, v_hz=v, energies_hz=e, psi=psi, x0_m=well["x0_m"], x_min_m=x_min,
                           v_min_hz=v_min, purity=float(label_purity(model, s, [x_min], cfg.theta)[0]),
-                          sites={0: well})
+                          sites={0: well}, window_m=float(window_m), edge_fraction=edge)
         else:
             out[s]["sites"][k] = well
+            out[s]["edge_fraction"] = max(out[s]["edge_fraction"], edge)
     return out
 
 
@@ -387,13 +486,27 @@ def _bias_levels(b_tuple):
     return eigenlevels(np.array(b_tuple))
 
 
+def _extinction_key(er):
+    """Hashable identity of an extinction ratio: the number, or for a measured
+    profile (``fields.extinction.ExtinctionProfile``) its angle and ER arrays;
+    None for any other callable (not cached)."""
+    if not callable(er):
+        return er
+    theta, values = getattr(er, "theta", None), getattr(er, "er", None)
+    if isinstance(theta, np.ndarray) and isinstance(values, np.ndarray):
+        return (type(er).__name__, theta.tobytes(), values.tobytes())
+    return None
+
+
 def _levels_key(cfg, b, site, states):
     """Hashable identity of one axis' level calculation (None: do not cache)."""
-    if callable(cfg.extinction_ratio):
+    er = _extinction_key(cfg.extinction_ratio)
+    if er is None:
         return None
     frame = None if cfg.frame is None else tuple(np.asarray(cfg.frame, float).ravel())
-    fields = tuple((k, v) for k, v in vars(cfg).items() if k != "frame")
-    return (fields, frame, tuple(b), site.n_levels, site.grid_points, site.grid_half_width_m, tuple(states))
+    fields = tuple((k, er if k == "extinction_ratio" else v) for k, v in vars(cfg).items() if k != "frame")
+    return (fields, frame, tuple(b), site_n_levels(site), site.grid_points, site.grid_half_width_m,
+            tuple(states))
 
 
 def _sum_rule(lv_upper, lv_lower, w, carrier_hz):
@@ -444,11 +557,25 @@ def spectrum(site: SiteConfig, states=(UPPER, LOWER), max_dn=2, cache=None):
     vanishes; nothing here divides by it. 'purity_upper' / 'purity_lower'
     are ``label_purity`` at each trap minimum.
 
+    Levels and temperature. ``site.n_levels`` None picks the level count
+    from the temperature (``n_levels_for``; 'n_levels' in the result). The
+    thermal weights use the computed (anharmonic) energies of the initial
+    state, normalized over the kept levels; per axis 'dropped_population'
+    is the estimated thermal population above the last kept level
+    (``dropped_population``; above DROPPED_POPULATION only at the
+    MAX_LEVELS cap or with a fixed n_levels), and the result's
+    'dropped_population' is that of the 3D initial state, 1 - prod(1 - d).
+    'window_m' / 'window_edge_fraction' give the eigen-window used and the
+    highest level's |psi|^2 at its edge (``axis_levels``).
+
     ``cache`` (a dict, optional) keeps each axis' vibrational levels between
-    calls, so a change of temperature recomputes nothing and a change of
-    one pair recomputes only that pair (the interactive explorer passes one).
+    calls, so a change of one pair recomputes only that pair (the
+    interactive explorer passes one). A change of temperature recomputes
+    nothing when the level count stays the same; with n_levels None it
+    usually changes the count, and then every pair is recomputed.
     """
     upper, lower = states
+    n_lv = site_n_levels(site)
     b = np.asarray(site.b_lab_gauss, float)
     levels = _bias_levels(tuple(float(v) for v in b))
     zeeman = levels[upper][0] - levels[lower][0]
@@ -457,7 +584,7 @@ def spectrum(site: SiteConfig, states=(UPPER, LOWER), max_dn=2, cache=None):
         key = None if cache is None else _levels_key(cfg, b, site, states)
         lv = cache.get(key) if key is not None else None
         if lv is None:
-            lv = axis_levels(cfg, b, site.n_levels, site.grid_points, site.grid_half_width_m, states)
+            lv = axis_levels(cfg, b, n_lv, site.grid_points, site.grid_half_width_m, states)
             if key is not None:
                 if len(cache) > 256:
                     cache.clear()
@@ -470,11 +597,11 @@ def spectrum(site: SiteConfig, states=(UPPER, LOWER), max_dn=2, cache=None):
             fcs[k] = f
         fc_all = sum(fcs.values())
         f_u, f_l = float(e_u[1] - e_u[0]), float(e_l[1] - e_l[0])
-        w = thermal_weights(f_u, site.temperature_k, site.n_levels)
+        w = thermal_weights_from_energies(e_u, site.temperature_k)
         carrier = float(e_u[0] - e_l[0])
         carrier_shift += carrier
         diag = float(np.sum(w * np.diag(fc_all)))
-        n_idx = np.arange(site.n_levels)
+        n_idx = np.arange(n_lv)
         listed = np.abs(n_idx[:, None] - n_idx[None, :]) <= max_dn       # [n', n]
         centroid, rms = _sum_rule(lv[upper], lv[lower], w, carrier)
         x_u, x_l = lv[upper]["x0_m"], lv[lower]["x0_m"]
@@ -487,12 +614,15 @@ def spectrum(site: SiteConfig, states=(UPPER, LOWER), max_dn=2, cache=None):
             nearest_site=k_near, nearest_displacement_m=x_l + k_near * cfg.spacing_m - x_u,
             centroid_offset_hz=centroid, rms_width_hz=rms,
             strength_in_lines=float(np.sum(w * np.sum(np.where(listed, fc_all, 0.0), axis=0))),
-            dn_weights={dn: float(np.sum(w[max(0, -dn):site.n_levels - max(0, dn)]
+            dn_weights={dn: float(np.sum(w[max(0, -dn):n_lv - max(0, dn)]
                                          * np.diagonal(fc_all, offset=-dn)))
                         for dn in range(-max_dn, max_dn + 1)},
-            purity_upper=lv[upper]["purity"], purity_lower=lv[lower]["purity"])
-        for n in range(site.n_levels):
-            for n2 in range(site.n_levels):
+            purity_upper=lv[upper]["purity"], purity_lower=lv[lower]["purity"],
+            dropped_population=dropped_population(e_u, site.temperature_k),
+            window_m=max(lv[s].get("window_m", LEVEL_WINDOW_M) for s in states),
+            window_edge_fraction=max(lv[s].get("edge_fraction", 0.0) for s in states))
+        for n in range(n_lv):
+            for n2 in range(n_lv):
                 dn = n2 - n
                 if dn == 0 or abs(dn) > max_dn:
                     continue
@@ -510,7 +640,9 @@ def spectrum(site: SiteConfig, states=(UPPER, LOWER), max_dn=2, cache=None):
                 carrier_shift_hz=float(carrier_shift), carrier_weight=carrier_weight,
                 carrier_weight_same_site=float(np.prod([d["diagonal_sites"][0] for d in per_axis.values()])),
                 strength_in_lines=carrier_weight + sum(l[3] for l in lines),
-                axes=per_axis, lines=lines, site_lines=site_lines)
+                axes=per_axis, lines=lines, site_lines=site_lines, n_levels=n_lv,
+                dropped_population=float(1.0 - np.prod([1.0 - d["dropped_population"]
+                                                         for d in per_axis.values()])))
 
 
 def collapse_lines(lines, axis=None):

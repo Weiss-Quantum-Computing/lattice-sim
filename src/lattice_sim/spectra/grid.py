@@ -392,6 +392,10 @@ class GridJob:
             self.nodes[ax] = (chebyshev_nodes(a_s.min(), a_s.max(), node_count),
                               chebyshev_nodes(a_r.min(), a_r.max(), node_count))
             self.templates[ax] = setups[ax].config_at(np.zeros(3))
+        if self.site.n_levels is None:
+            # from the temperature (sidebands.n_levels_for), with the pairs' trap frequencies at the centre
+            self.site = replace(self.site, n_levels=sb.n_levels_for(
+                site.temperature_k, [self.templates[ax].trap_frequency_hz for ax in PAIRS]))
         self.direct = set()
         self.pending = [(ax, vs, vr) for ax in PAIRS for vs in self.nodes[ax][0] for vr in self.nodes[ax][1]
                         if self._key(ax, vs, vr) not in self.cache]
@@ -529,7 +533,8 @@ class GridJob:
 
 
 def compute_grid(site, setups, cache=None, **kw):
-    """GridResult of the site configuration (temperature, field, level count)
+    """GridResult of the site configuration (temperature, field, level count;
+    ``site.n_levels`` None: from the temperature, ``sidebands.n_levels_for``)
     with every pair built from ``setups[axis]`` at every site."""
     return GridJob(site, setups, cache, **kw).run()
 
