@@ -111,9 +111,13 @@ def calibration_model(transverse_hz=TRANSVERSE_HZ, ref_dir=REFERENCE_DIR):
 
 
 def _model_key(m, handedness, er, trap_hz, spacing_m, b_vector):
+    """File key of a track cache. er None (the measured profile) also hashes the
+    bytes of MEASURED_ER_CSV, so a replaced or edited CSV builds new tracks."""
     tag = "ERmeas" if er is None else f"ER{float(er):.4g}"
     base = f"m{m}_h{int(handedness):+d}_{tag}_{trap_hz:.0f}Hz"
     extra = f"{spacing_m:.6e}_{np.round(b_vector, 7).tolist()}"
+    if er is None:
+        extra += "_" + hashlib.sha1(Path(MEASURED_ER_CSV).read_bytes()).hexdigest()
     return base + "_" + hashlib.sha1(extra.encode()).hexdigest()[:8]
 
 

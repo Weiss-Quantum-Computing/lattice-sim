@@ -177,3 +177,32 @@ def test_split_tables_are_checked_against_the_extinction_csv(tmp_path, monkeypat
     table.save("data/x_ERmeas133_h-1_10kHz_F3m-3.npz")                  # an old table without a record
     assert PotentialTable.load("data/x_ERmeas133_h-1_10kHz_F3m-3.npz").inputs is None
     assert ss.split_tables() is not None                                # used, with a printed note
+
+
+def test_pair_physics_cache_is_keyed_by_its_inputs(tmp_path, monkeypatch):
+    from lattice_sim.spin import pair_physics as pp
+    calls = []
+
+    def fake(m, thetas, eta=0.005, trap_hz=10e3):
+        calls.append((m, eta, trap_hz))
+        return np.full(thetas.size, trap_hz), np.full(thetas.size, eta)
+    monkeypatch.setattr(pp, "compute_curves", fake)
+    a = pp.PairPhysics.load_or_compute(1, cache_dir=tmp_path, n=7)
+    assert (tmp_path / "pair_physics_m1.npz").exists() and len(calls) == 1
+    b = pp.PairPhysics.load_or_compute(1, cache_dir=tmp_path, n=7)
+    assert len(calls) == 1 and np.array_equal(a.de0_hz, b.de0_hz)          # from the cache
+    c = pp.PairPhysics.load_or_compute(1, cache_dir=tmp_path, n=7, trap_hz=12e3)
+    assert len(calls) == 2 and c.trap_hz == 12e3 and c.de0_hz[0] == 12e3   # another trap: recomputed
+    pp.PairPhysics.load_or_compute(1, cache_dir=tmp_path / "missing", n=7)
+    assert not (tmp_path / "missing").exists()                               # no folder is created
+
+
+def test_chain_track_key_follows_the_measured_csv(tmp_path, monkeypatch):
+    from lattice_sim.gates import chain as ch
+    b = ch.phase4_b_vector()
+    first = ch._model_key(3, -1, None, 10e3, 4.8374e-6, b)
+    csv = tmp_path / "er.csv"
+    csv.write_bytes(ch.MEASURED_ER_CSV.read_bytes() + b"\n")
+    monkeypatch.setattr(ch, "MEASURED_ER_CSV", csv)
+    assert ch._model_key(3, -1, None, 10e3, 4.8374e-6, b) != first
+    assert ch._model_key(3, -1, 3e4, 10e3, 4.8374e-6, b).startswith("m3_h-1_ER3e+04_10000Hz_")

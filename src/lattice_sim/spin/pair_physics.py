@@ -20,6 +20,7 @@ from pathlib import Path
 import numpy as np
 from scipy.interpolate import CubicSpline
 
+from .. import cache
 from ..atom.ground_state import field_sensitivity, magic_field
 from ..atom.polarizability import differential_scalar_ratio
 from ..constants import LATTICE_WAVELENGTH_M
@@ -27,7 +28,11 @@ from ..fields.lattice_pair import LatticePair
 from ..fields.potential import StatePotential
 
 A_LAT = 4.8374e-6
-DATA_DIR = Path(__file__).resolve().parents[3] / "data"
+DATA_DIR = Path(__file__).resolve().parents[3] / "data"   # the repo's data/ (editable install); not created
+
+
+def _b_field():
+    return magic_field() * np.array([np.cos(np.pi / 4), np.sin(np.pi / 4), 0.0])
 
 
 def _bottom(model, state, theta):
@@ -38,7 +43,7 @@ def _bottom(model, state, theta):
 
 
 def compute_curves(m, thetas, eta=0.005, trap_hz=10e3):
-    b = magic_field() * np.array([np.cos(np.pi / 4), np.sin(np.pi / 4), 0.0])
+    b = _b_field()
     lin = StatePotential(LatticePair(), b, trap_frequency_hz=trap_hz)
     ell = StatePotential(LatticePair(extinction_ratio=1 / eta**2, handedness=-1), b,
                          trap_frequency_hz=trap_hz)
@@ -85,12 +90,19 @@ class PairPhysics:
         return self._e0(th, 1) + eta * self._s(th, 1)
 
     @classmethod
-    def load_or_compute(cls, m, cache_dir=DATA_DIR, n=91):
+    def load_or_compute(cls, m, cache_dir=DATA_DIR, n=91, eta=0.005, trap_hz=10e3):
+        """The curves from ``cache_dir/pair_physics_m{m}.npz`` when that file was
+        built from the same inputs (m, angle grid, eta, trap frequency, field;
+        ``lattice_sim.cache``), else computed (~30 s) and stored there if the
+        folder exists (it is not created: with a non-editable install the
+        repo's data/ is not there, and nothing is written)."""
         path = Path(cache_dir) / f"pair_physics_m{m}.npz"
-        if path.exists():
-            d = np.load(path)
-            return cls(m, d["thetas"], d["de0"], d["s"])
+        inputs = dict(kind="pair_physics", m=m, n=n, eta=eta, trap_hz=trap_hz, b=_b_field())
+        d = cache.load(path, inputs)
+        if d is not None:
+            return cls(m, d["thetas"], d["de0"], d["s"], trap_hz)
         thetas = np.linspace(0, np.pi, n)
-        e0, s = compute_curves(m, thetas)
-        np.savez(path, thetas=thetas, de0=e0, s=s)
-        return cls(m, thetas, e0, s)
+        e0, s = compute_curves(m, thetas, eta=eta, trap_hz=trap_hz)
+        if path.parent.is_dir():
+            cache.save(path, inputs, thetas=thetas, de0=e0, s=s)
+        return cls(m, thetas, e0, s, trap_hz)
