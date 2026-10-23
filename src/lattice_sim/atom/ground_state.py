@@ -59,7 +59,11 @@ def eigenlevels(b_vector_gauss):
     """Diagonalize the ground manifold; label states by (F, m_F) along B.
 
     m_F is the expectation of F projected on the field direction; F is
-    assigned by energy ordering (upper nine states are F = 4). Returns
+    assigned by energy ordering (upper nine states are F = 4). That is right
+    at any field: the stretched |4,-4> stays above every F = 3 level (by
+    >= 1.2 GHz from 100 G to 100 kG in Breit-Rabi; the 2026-10-15 review
+    suspected a crossing near 3 kG, which does not occur;
+    ``tests/test_ground_state.py``). Returns
     {(F, m_F): (energy_Hz, eigenvector)}.
     """
     b = np.asarray(b_vector_gauss, dtype=float)

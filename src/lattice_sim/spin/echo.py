@@ -118,13 +118,15 @@ def coefficients(grid, pair, eta_of_theta, a=1.0):
     e0, s = pair.de0(th), pair.s(th)
     c = {
         "field": np.where(tr, pair.kappa_b_hz_per_mg, 0.0),
-        "intensity": np.where(tr, 2 * e0 * sc**2 + s * eta * sc, 0.5 * pair.storage_ls_hz * a),
+        # storage: the light shift goes as the zero-point energies, f ~ sqrt(I), so a site of
+        # relative intensity a has LS sqrt(a) and d/d(ln I) of it is LS sqrt(a) / 2
+        "intensity": np.where(tr, 2 * e0 * sc**2 + s * eta * sc, 0.5 * pair.storage_ls_hz * np.sqrt(a)),
         "ellipticity": np.where(tr, s * sc, 0.0),
         # d(Delta E)/d theta with the same intensity scaling as "static":
         # the drag term goes as sc^2, the ellipticity term as sc
         "rotation": np.where(tr, pair.ddtheta(th, 0.0) * sc**2
                              + (pair.ddtheta(th, eta) - pair.ddtheta(th, 0.0)) * sc, 0.0),
-        "static": np.where(tr, e0 * sc**2 + s * eta * sc, pair.storage_ls_hz * a),
+        "static": np.where(tr, e0 * sc**2 + s * eta * sc, pair.storage_ls_hz * np.sqrt(a)),
     }
     return c
 

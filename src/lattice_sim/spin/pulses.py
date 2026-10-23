@@ -2,7 +2,11 @@
 
 Pulses are SU(2) rotations exp(-i (theta/2) n.sigma) with
 n = (Omega cos phi, Omega sin phi, delta) / |.|, the rotation angle scaled by
-(1 + eps) for an amplitude error eps and lengthened by the detuning. Free
+(1 + eps) for an amplitude error eps and lengthened by the detuning.
+Approximation: (1 + eps) multiplies the whole generalized Rabi rotation,
+detuning part included; physically eps scales Omega only, which also tilts
+the axis, n ~ (Omega (1 + eps) cos phi, Omega (1 + eps) sin phi, delta). The
+difference is second order in eps x delta / Omega. Free
 evolution between pulses is ideal here (its noise is handled by
 ``spin.echo``), so this module isolates the pulse-error contribution.
 

@@ -130,7 +130,13 @@ class RampProblem:
         ]
 
     def optimize(self, a0, max_iter=60, verbose=True):
-        """Maximize the worst band P0 (as minimize the worst log-infidelity)."""
+        """Maximize the worst band P0 (as minimize the worst log-infidelity).
+
+        Returns (best feasible a, its worst band P0, the scipy result, history).
+        The band-min constraint is non-smooth (a minimum over samples) and
+        SLSQP differentiates it with eps = 1e-6 steps, so ``result.success``
+        and ``result.x`` are not meaningful; the best feasible iterate (kept
+        by the callback) is the answer."""
         a0 = self.project(np.asarray(a0, float))
         u0 = -np.log10(max(1 - self.band_min(a0).min(), 1e-12)) - 1e-3
         best = dict(a=a0.copy(), score=self.band_min(a0).min())

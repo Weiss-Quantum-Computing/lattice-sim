@@ -101,9 +101,12 @@ class StatePotential:
         x_fine = np.linspace(x[i] - fit_half_width, x[i] + fit_half_width, 41)
         v_fine = self.potential(state, x_fine, theta)
         c2, c1, _ = np.polyfit(x_fine - x[i], v_fine, 2)
+        if not c2 > 0:
+            # the fit landed on a saddle or a maximum: no harmonic frequency (NaN, so callers see it)
+            return float(x[i]), float("nan")
         x_min = x[i] - c1 / (2 * c2)
         curvature = 2 * c2 * H  # J / m^2
-        frequency = np.sqrt(max(curvature, 0.0) / MASS_CS) / (2 * np.pi)
+        frequency = np.sqrt(curvature / MASS_CS) / (2 * np.pi)
         return x_min, frequency
 
     def track(self, state, thetas, start=0.0):

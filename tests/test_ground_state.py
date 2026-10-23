@@ -66,3 +66,14 @@ def test_rf_splittings_at_magic_field():
     # In F = 3 (g_F < 0) |3,-1> lies above |3,0>, so compare magnitudes.
     assert abs(transition_frequency((3, 0), (3, -1), b)) / 1e3 == pytest.approx(488.7, abs=0.1)
     assert abs(transition_frequency((4, 1), (4, 0), b)) / 1e3 == pytest.approx(487.1, abs=0.1)
+
+
+@pytest.mark.parametrize("b_gauss", [1.4, 3e3, 2e4, 1e5])
+def test_energy_ordered_f_labels_hold_at_any_field(b_gauss):
+    """eigenlevels labels F by energy order; Breit-Rabi gives every (F, m_F) energy
+    independently, so the labels are right if the two agree state by state."""
+    lv = eigenlevels(np.array([0.0, 0.3, 1.0]) / np.sqrt(1.09) * b_gauss)
+    for (f, m), (energy, _) in lv.items():
+        assert energy == pytest.approx(breit_rabi(f, m, b_gauss), abs=1e-3 * max(1.0, b_gauss))
+    top3 = max(breit_rabi(3, m, b_gauss) for m in range(-3, 4))
+    assert breit_rabi(4, -4, b_gauss) - top3 > 1e9

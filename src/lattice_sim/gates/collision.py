@@ -88,7 +88,13 @@ def _f3_states():
 
 @lru_cache(maxsize=None)
 def _symmetric_states():
-    """s_mu = (|mu,-mu> + |-mu,mu>)/sqrt(2) in the 256-dim two-atom space."""
+    """s_mu = (|mu,-mu> + |-mu,mu>)/sqrt(2) in the 256-dim two-atom space.
+
+    Deliberately NOT renormalized: for mu = 0 this is sqrt(2)|0,0>, norm
+    sqrt(2), and that factor is exactly what the direct + exchange contact
+    term needs (worked through in the 2026-10-15 review;
+    ``tests/test_collision.py::test_channel_projectors_complete`` pins the
+    mu = 0 diagonal at 2). Do not "fix" it."""
     st = _f3_states()
     return np.array([(np.kron(st[m], st[-m]) + np.kron(st[-m], st[m])) / np.sqrt(2) for m in MU])
 

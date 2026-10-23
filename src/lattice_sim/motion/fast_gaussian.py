@@ -64,9 +64,12 @@ class HarmonicScenario:
     """x0(theta) and f(theta) for one state and model variant, splined."""
 
     def __init__(self, theta, x0_m, f_hz, name="", f_scale=1.0):
+        """x0_m keeps its sign (a state moving to -x has x0 < 0): the ground-state
+        population is the same for the mirrored trajectory, so a caller may fold
+        with abs(), but a sign error in a file stays visible here."""
         from scipy.interpolate import CubicSpline
         self.name = name
-        self._x0 = CubicSpline(theta, np.abs(x0_m))
+        self._x0 = CubicSpline(theta, np.asarray(x0_m, float))
         self._f = CubicSpline(theta, np.asarray(f_hz) * f_scale)
 
     @classmethod

@@ -20,6 +20,7 @@ descriptions can be compared on identical numerics.
 """
 
 import json
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
@@ -27,6 +28,9 @@ from scipy.linalg import eig_banded
 
 from ..cache import inputs_record
 from ..constants import H, HBAR, MASS_CS
+
+THETA_TOLERANCE_RAD = 1e-6           # PotentialTable.at warns beyond this outside the table
+MONOTONIC_TOLERANCE_V = 2.0          # load_waveform: larger drops are not noise (a return leg, ripple)
 
 
 @dataclass
@@ -37,8 +41,13 @@ class PotentialTable:
     inputs = None            # what a loaded table was built from (``save(inputs=)``), if recorded
 
     def at(self, theta):
-        """V(x) / h at angle theta, linear interpolation between rows."""
+        """V(x) / h at angle theta, linear interpolation between rows; outside
+        the table the end row, with a warning beyond THETA_TOLERANCE_RAD."""
         th = self.thetas
+        theta = float(theta)
+        if theta < th[0] - THETA_TOLERANCE_RAD or theta > th[-1] + THETA_TOLERANCE_RAD:
+            warnings.warn(f"potential table asked at theta = {theta:.6f} rad, outside its "
+                          f"{th[0]:.6f}..{th[-1]:.6f} rad; the end row is used", stacklevel=2)
         theta = float(np.clip(theta, th[0], th[-1]))
         i = int(np.clip(np.searchsorted(th, theta) - 1, 0, th.size - 2))
         w = (theta - th[i]) / (th[i + 1] - th[i])
@@ -168,12 +177,21 @@ class Transport1D:
         return out + (np.array(states),) if keep_states else out
 
 
-def load_waveform(path, v_full_scale=5400.0):
+def load_waveform(path, v_full_scale=5400.0, max_drop_v=MONOTONIC_TOLERANCE_V):
     """Read a Transport-Optimizer ramp; return t (us), theta (rad) and the
-    voltage (V). The voltage is made monotonic (running maximum)."""
+    voltage (V). The voltage is made monotonic (running maximum), which only
+    removes noise: a drop of more than max_drop_v below the running maximum
+    (a forward + return record, ILC ripple) raises ValueError instead of being
+    flattened into a hold. max_drop_v=np.inf accepts any file."""
     data = np.genfromtxt(path, delimiter=",", names=True)
     t = np.asarray(data["time_us"], float)
-    v = np.maximum.accumulate(np.asarray(data["voltage_V"], float))
+    raw = np.asarray(data["voltage_V"], float)
+    v = np.maximum.accumulate(raw)
+    drop = float(np.max(v - raw)) if raw.size else 0.0
+    if drop > max_drop_v:
+        i = int(np.argmax(v - raw))
+        raise ValueError(f"{path}: the voltage falls {drop:.1f} V below its running maximum (at t = {t[i]:.1f} us); "
+                         f"not a monotonic rise (limit {max_drop_v:g} V)")
     return t, np.pi * v / v_full_scale, v
 
 

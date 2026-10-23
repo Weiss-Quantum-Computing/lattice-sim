@@ -771,17 +771,22 @@ def nominal_site(trap_hz=(19e3, 16e3, 12.5e3), rotation_fraction=0.03, extinctio
     return SiteConfig(axes, b_gauss * np.array([np.cos(phi), np.sin(phi), 0.0]), temperature_k)
 
 
-def with_alignment(site: SiteConfig, axis, static_offset_m=0.0, rotating_offset_m=0.0,
+def with_alignment(site: SiteConfig, axis, static_offset_m=None, rotating_offset_m=None,
                    crossing_half_angle_deg=None, waist_m=60e-6, **axis_fields):
     """Copy of ``site`` with one pair's centering, crossing angle and any
     AxisConfig field changed. The crossing angle changes the spacing at
     fixed intensity, so the trap frequency scales as 1 / spacing
-    (``trap_frequency_hz`` refers to the depth at the nominal spacing)."""
+    (``trap_frequency_hz`` refers to the depth at the nominal spacing).
+    An arm offset left at None keeps that arm's amplitude, so calls can be
+    chained (0 centres the arm)."""
     axes = []
     for cfg in site.axes:
         if cfg.axis == axis:
-            changes = dict(static_amplitude=amplitude_from_offset(static_offset_m, waist_m),
-                           rotating_amplitude=amplitude_from_offset(rotating_offset_m, waist_m))
+            changes = {}
+            if static_offset_m is not None:
+                changes["static_amplitude"] = amplitude_from_offset(static_offset_m, waist_m)
+            if rotating_offset_m is not None:
+                changes["rotating_amplitude"] = amplitude_from_offset(rotating_offset_m, waist_m)
             if crossing_half_angle_deg is not None:
                 spacing = spacing_from_crossing(np.deg2rad(crossing_half_angle_deg))
                 changes["spacing_m"] = spacing
