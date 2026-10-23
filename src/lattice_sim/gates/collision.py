@@ -184,15 +184,21 @@ class CollisionModel:
         self.zeeman_hz = zee - zee[MU == self.m][0]
         self.index = int(np.flatnonzero(MU == self.m)[0])
 
+    def _clip(self, theta):
+        # outside the model's angle grid the splines extrapolate; hold the end values instead,
+        # as chain.Tracks does, so the two code paths agree for any theta
+        return np.clip(np.asarray(theta, float), self.thetas[0], self.thetas[-1])
+
     def separation(self, theta):
-        return self._sep(theta)
+        return self._sep(self._clip(theta))
 
     def overlap(self, theta):
-        return overlap_density(self.separation(theta), self._f1(theta), self._f2(theta),
+        th = self._clip(theta)
+        return overlap_density(self.separation(th), self._f1(th), self._f2(th),
                                *self.transverse_hz)
 
     def hamiltonian_hz(self, theta, a_op_m):
-        diag = self.zeeman_hz + self._lat(theta)
+        diag = self.zeeman_hz + self._lat(self._clip(theta))
         return np.diag(diag) + 2 * HBAR / MASS_CS * self.overlap(theta) * a_op_m
 
     def evolve(self, t_us, theta_t, a_op_m, dt_us=0.5):

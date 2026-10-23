@@ -6,7 +6,10 @@ depth and crossing angle, spacing, extinction ratio, handedness, bias field)
 as an extra lattice model, "First principles, explorer x pair", next to the
 Phase 4 configuration (10 kHz x trap, measured extinction profile) and the
 Transport-Optimizer calibration files. Its calculations run on the
-explorer's worker (``app.run_background``).
+window's own worker thread, not the explorer's (``run_background=None``),
+so the ~30 s first build of a track cache does not block the spectrum; the
+two workers share no cache objects (the chain window keeps its own models
+and data/chain_tracks_*.npz), so running both at once is safe.
 """
 
 import numpy as np

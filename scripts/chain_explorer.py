@@ -74,7 +74,10 @@ ASSUMPTIONS = (
     "U/h = 2ħ a O / m (Phase 4, collision.py), spin exchange neglected in the phase; ideal "
     "instantaneous π/2, π and map pulses; no field, intensity or pointing noise; identical legs, so the "
     "light-shift phases cancel; a homogeneous chain (every neighbour pair identical); only nearest "
-    "neighbours overlap. Assumed map: |4,+1⟩ → |3,+m⟩ (moves +x), |3,−1⟩ → |3,−m⟩.")
+    "neighbours overlap. Assumed map: |4,+1⟩ → |3,+m⟩ (moves +x), |3,−1⟩ → |3,−m⟩ (PLUS_MOVER_QUBIT, "
+    "unconfirmed): it sets only the sign of each atom's fringe phase shift, never the contrast, and with "
+    "identical legs the shift is 0, so a phase-shift prediction here is not a tested one. Only leg 1 is "
+    "checked with the 7-state model; leg 2 is taken as identical.")
 
 
 def state_label(m, sign):
@@ -539,7 +542,7 @@ class ChainWindow:
         for col, text, w in (("atom", "atom", 70), ("neighbours", "interacting neighbours n", 170),
                              ("rule", "fringe contrast, cos^n(Φ/2) rule", 230),
                              ("sim", "fringe contrast, state-vector simulation", 260),
-                             ("shift", "fringe phase shift (deg)", 170)):
+                             ("shift", "fringe phase shift (deg; sign from the assumed map)", 290)):
             self.tree.heading(col, text=text)
             self.tree.column(col, width=w, anchor="e" if col != "atom" else "w")
         self.tree.pack(fill="x", pady=(4, 2))

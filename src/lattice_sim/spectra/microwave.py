@@ -29,7 +29,11 @@ compile microwave pulses):
   same grid (``ddsgui/config.py:68-80``: AFP 8 us, Blackman 2 us, square
   1 us). Each pulse's first tic is 16 register writes (16 us) with the
   amplitude still zero for Blackman and AFP (the register object starts
-  zeroed, ``ad9852data.h:383-400``); it is a delay, not modelled.
+  zeroed, ``ad9852data.h:383-400``); it is a delay, not modelled. It does
+  not change the transfer, but the real drive (and the AFP sweep centre)
+  starts 16 us after the pulse does, while the time axis here starts with
+  the drive: add 16 us when comparing with time-resolved data or external
+  timing.
 * Power -> field. The power column is in W; ``Pow2AmpWord``
   (``conversions.cpp:112-282``) maps it through a measured 2015 table
   (0 .. POWMAX = 5.188 W, ``DDSconstants.h``) to the 12-bit DDS amplitude

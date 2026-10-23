@@ -435,6 +435,10 @@ def compute_sequence(cm, s, hold_scan=True):
                segments=segments, t_us=t, theta=theta, u_hz=u, phase=phase, phi1=phi1, phi2=phi2,
                rel_overlap=cm.overlap(theta) / o_full,
                phi_ramp=phi_ramp, frames=frames, spacing_m=cm.spacing_m, o_full=o_full,
+               # leg 2 is not simulated separately: the 7-state check (seven_state_check) runs on leg 1,
+               # leg 2 is assumed identical (same ramp, hold and model); PLUS_MOVER_QUBIT only signs the shifts
+               notes=("seven-state check on leg 1 only; leg 2 assumed identical",
+                      f"PLUS_MOVER_QUBIT = {PLUS_MOVER_QUBIT} assumed: sets the sign of the fringe phase shifts only"),
                hold=dict(rel_overlap=float(cm.overlap(theta_hold) / o_full),
                          overlap_m3=float(cm.overlap(theta_hold)),
                          u_hz=float(interaction_along(cm, theta_hold, a_m)),

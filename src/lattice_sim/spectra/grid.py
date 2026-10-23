@@ -58,6 +58,8 @@ frequency scan of the whole array records).
 """
 
 import time
+import traceback
+import warnings
 from dataclasses import dataclass, field, replace
 
 import numpy as np
@@ -70,12 +72,37 @@ from .sidebands import LOWER, PAIR_FRAMES, UPPER, AxisConfig, SiteConfig, collap
 
 GRID_HALF = 4                    # sites -4 .. 4 along each lab axis: 9 x 9 x 9
 NODE_COUNT = 5                   # Chebyshev nodes per arm amplitude (25 level calculations per pair)
-NODE_GRID_POINTS = 601           # position points of a node's level calculation (SiteConfig: 1201)
+NODE_GRID_POINTS = 601           # position points of a node's level calculation (SiteConfig: 1201); at 60
+                                 # levels (z, 0.3 depth) line frequencies move < 6 Hz (tests/test_grid.py)
 NODE_CACHE_BYTES = 300e6         # node level calculations kept between grids (~0.2 MB each at 13 levels)
 WAIST_M = 60e-6                  # params/apparatus.yaml waist_um (thesis value, unmeasured at the atoms)
 NOMINAL_SPACING_M = 4.8374e-6    # the spacing that AxisConfig.trap_frequency_hz refers to
 SITE_BLOCK = 81                  # sites whose levels are interpolated in one matrix product
 PAIRS = "xyz"
+# a quantity that raises one of these at a site is undefined there (NaN, silently): a missing key,
+# a vanishing carrier; any other exception is a bug in the quantity and is reported (first one)
+QUANTITY_EXPECTED_ERRORS = (KeyError, IndexError, ZeroDivisionError, FloatingPointError)
+
+
+def site_values(spectra, fn, out, sites):
+    """out[m] = fn(spectra[m]) for m in sites (spectra None skipped). Expected
+    failures (QUANTITY_EXPECTED_ERRORS) leave NaN; any other exception leaves
+    NaN too and is counted. Returns (n_unexpected, first unexpected error as
+    'Type: message', '' if none)."""
+    n_bad, first = 0, ""
+    for m in sites:
+        sp = spectra[m]
+        if sp is None:
+            continue
+        try:
+            out[m] = float(fn(sp))
+        except QUANTITY_EXPECTED_ERRORS:
+            pass
+        except Exception as err:                      # a bug in fn: keep going, but say so
+            n_bad += 1
+            if not first:
+                first = "".join(traceback.format_exception_only(type(err), err)).strip()
+    return n_bad, first
 
 
 def rayleigh_waist_change(distance_m, waist_m=WAIST_M, wavelength_m=LATTICE_WAVELENGTH_M):
@@ -341,6 +368,7 @@ class GridResult:
     nodes_computed: int = 0
     direct_pairs: tuple = field(default_factory=tuple)
     misses: int = 0                    # pair levels spectrum() computed itself (0: all interpolated)
+    quantity_error: str = ""           # the last quantity() call's unexpected failure, '' if none
 
     @property
     def shape(self):
@@ -355,15 +383,16 @@ class GridResult:
         return self.site(0, 0, 0)
 
     def quantity(self, fn):
-        """fn(sp) -> float at every site, (n, n, n); NaN where fn fails or the site was not computed."""
+        """fn(sp) -> float at every site, (n, n, n); NaN where the site was not
+        computed or fn is undefined there (QUANTITY_EXPECTED_ERRORS). Any other
+        exception also gives NaN, is recorded in ``quantity_error`` ('' when
+        none) and warned about once per call (a typo in a quantity used to give
+        an all-NaN map with no message)."""
         out = np.full(len(self.spectra), np.nan)
-        for m, sp in enumerate(self.spectra):
-            if sp is None:                                   # not computed (GridJob sites=)
-                continue
-            try:
-                out[m] = float(fn(sp))
-            except Exception:
-                pass
+        n_bad, first = site_values(self.spectra, fn, out, range(len(self.spectra)))
+        self.quantity_error = f"failed at {n_bad} sites: {first}" if n_bad else ""
+        if n_bad:
+            warnings.warn(f"grid quantity {self.quantity_error}", stacklevel=2)
         return out.reshape(self.shape)
 
 
@@ -568,8 +597,10 @@ def builtin_quantities():
     for ax in PAIRS:
         q[f"{ax} pair: sideband / carrier, Δn = +1"] = (lambda sp, ax=ax: sideband_ratio(sp, ax, 1))
     for ax in PAIRS:
-        q[f"{ax} pair: well separation x(|3,−3⟩) − x(|4,−4⟩) (nm)"] = (
-            lambda sp, ax=ax: sp["axes"][ax]["displacement_m"] * 1e9)
+        # to the nearest |3,-3> well: past theta ~ pi/2 that is a neighbouring site's (displacement_m is the
+        # own-site well's, which the atom no longer overlaps)
+        q[f"{ax} pair: well separation x(|3,−3⟩) − x(|4,−4⟩), nearest well (nm)"] = (
+            lambda sp, ax=ax: sp["axes"][ax].get("nearest_displacement_m", sp["axes"][ax]["displacement_m"]) * 1e9)
     return q
 
 

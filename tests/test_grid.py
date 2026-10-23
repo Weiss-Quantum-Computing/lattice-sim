@@ -378,3 +378,59 @@ def test_drawing_functions_run_headless(single_arm):
                 continue
             assert ax.get_xlabel(), ax.get_title()
             assert any(t.get_text() for t in ax.get_xticklabels())
+
+
+def _tiny_result(spectra):
+    n = 3
+    return G.GridResult(index=np.arange(-1, 2), spacing_m={a: 4.8e-6 for a in G.PAIRS},
+                        positions_m=np.zeros((n, n, n, 3)), amplitudes={}, spectra=spectra, zeeman_hz=0.0,
+                        temperature_k=1e-6, n_levels=13)
+
+
+def test_grid_quantity_reports_unexpected_errors():
+    import warnings
+    spectra = [dict(carrier_shift_hz=float(m), carrier_weight=0.0) for m in range(27)]
+    spectra[5] = None                                              # a site not computed
+    res = _tiny_result(spectra)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        v = res.quantity(lambda sp: sp["carrier_shift_hz"])
+        assert np.isnan(v.ravel()[5]) and v.ravel()[6] == 6.0 and res.quantity_error == ""
+        v = res.quantity(lambda sp: sp["missing"])                 # undefined: NaN, no message
+        v = res.quantity(lambda sp: 1.0 / sp["carrier_weight"])
+        assert np.all(np.isnan(v)) and res.quantity_error == ""
+    with pytest.warns(UserWarning, match="AttributeError"):
+        v = res.quantity(lambda sp: sp.carrier_shift_hz)            # a bug in the quantity: said
+    assert np.all(np.isnan(v)) and res.quantity_error.startswith("failed at 26 sites: AttributeError")
+    out = np.full(27, np.nan)
+    assert G.site_values(spectra, lambda sp: sp.x, out, range(27))[0] == 26
+
+
+def test_well_separation_quantity_uses_the_nearest_well():
+    q = {k: f for k, f in G.builtin_quantities().items() if "well separation" in k}
+    sp = dict(axes={ax: dict(displacement_m=-2.4e-6, nearest_displacement_m=0.1e-6) for ax in G.PAIRS})
+    assert all("nearest" in k for k in q) and len(q) == 3
+    assert [f(sp) for f in q.values()] == pytest.approx([100.0] * 3)
+
+
+def test_node_grid_resolution_holds_at_60_levels():
+    """NODE_GRID_POINTS (601, dx = 5 nm) against the 1201 of SiteConfig at the corner the explorer
+    reaches: z pair at 0.3 depth, 60 levels. Level 59 moves by 64 Hz (1 % of its 5.7 kHz spacing),
+    but both states move nearly together: carrier lines E_u(n) - E_l(n) change by < 0.6 Hz, the
+    |dn| <= 2 sidebands by up to 5.8 Hz at the top (levels below 13: 0.33 Hz)."""
+    from lattice_sim.spectra import sidebands as sb
+    site = sb.nominal_site()
+    z = replace([c for c in site.axes if c.axis == "z"][0], trap_frequency_hz=12.5e3 * np.sqrt(0.3))
+    a = sb.axis_levels(z, site.b_lab_gauss, 60, grid_points=G.NODE_GRID_POINTS)
+    b = sb.axis_levels(z, site.b_lab_gauss, 60, grid_points=1201)
+    du = a[sb.UPPER]["energies_hz"] - b[sb.UPPER]["energies_hz"]
+    dl = a[sb.LOWER]["energies_hz"] - b[sb.LOWER]["energies_hz"]
+    assert np.max(np.abs(du)) < 100.0 and np.max(np.abs(dl)) < 100.0
+    lines = du[None, :] - dl[:, None]                               # [n', n]
+    near = np.abs(np.arange(60)[:, None] - np.arange(60)[None, :]) <= 2
+    assert np.max(np.abs(np.diag(lines))) < 1.0
+    assert np.max(np.abs(lines[near])) < 10.0
+    assert np.max(np.abs(lines[:13, :13][near[:13, :13]])) < 0.5
+    fa = sb.franck_condon(a[sb.UPPER]["psi"], a[sb.LOWER]["psi"])
+    fb = sb.franck_condon(b[sb.UPPER]["psi"], b[sb.LOWER]["psi"])
+    assert np.max(np.abs(fa - fb)) < 1e-3

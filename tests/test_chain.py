@@ -272,3 +272,13 @@ def test_window_worker_keeps_polling_after_a_callback_error():
         assert errors[-1] == "calculation failed - see the console" and done.empty()
     finally:
         worker.close()
+
+
+def test_sequence_states_its_untested_assumptions(calibration):
+    s = ch.GateSettings(m=3, hold_v=4150.0, ramp="robust", lock_hold=True, n_frames=20, scan_points=9)
+    res = ch.compute_sequence(calibration, s, hold_scan=False)
+    assert any("leg 1 only" in n for n in res["notes"]) and any("PLUS_MOVER_QUBIT" in n for n in res["notes"])
+    # outside the model's angle grid the overlap holds its end value, as the packet tracks do
+    th_end = calibration.thetas[-1]
+    assert calibration.overlap(th_end + 0.2) == pytest.approx(float(calibration.overlap(th_end)), rel=1e-12)
+    assert calibration.separation(-0.1) == pytest.approx(float(calibration.separation(calibration.thetas[0])))

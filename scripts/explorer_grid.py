@@ -35,6 +35,7 @@ must not touch Tk), and re-evaluated when app.quantity_changed(name) is
 announced.
 """
 
+import sys
 import time
 import traceback
 from dataclasses import replace
@@ -514,6 +515,8 @@ class GridView:
             self._qcache.clear()
         if builtin:
             self._qcache[key] = result.quantity(fn)
+            if getattr(result, "quantity_error", ""):
+                self.status.configure(text=f"{name}: {result.quantity_error}", foreground="#c60")
             return self._qcache[key]
         self._evaluate(result, name, fn, key)
         return None
@@ -536,16 +539,13 @@ class GridView:
         out = np.full(n, np.nan)            # filled by the worker, read here only when complete
         pos = [0]
 
+        errors = [0, ""]                    # unexpected failures so far, the first one (G.site_values)
+
         def chunk(progress, cancelled):
             m0, m1 = pos[0], min(pos[0] + QUANTITY_BLOCK, n)
-            for m in range(m0, m1):
-                sp = result.spectra[m]
-                if sp is None:
-                    continue
-                try:
-                    out[m] = float(fn(sp))
-                except Exception:
-                    pass
+            n_bad, first = G.site_values(result.spectra, fn, out, range(m0, m1))
+            errors[0] += n_bad
+            errors[1] = errors[1] or first
             pos[0] = m1
             return m1
 
@@ -559,7 +559,11 @@ class GridView:
                 return
             self._q_pending = None
             self._qcache[key] = out.reshape(result.shape)
-            if not self.running:
+            if errors[0]:
+                print(f"grid quantity {name!r} failed at {errors[0]} sites: {errors[1]}", file=sys.stderr)
+                self.status.configure(text=f"{name}: failed at {errors[0]} of {n} sites ({errors[1]})",
+                                      foreground="#c60")
+            elif not self.running:
                 self.status.configure(text=f"{n} sites", foreground="#666666")
             self.redraw()
         self.app.run_background(chunk, done=done)
