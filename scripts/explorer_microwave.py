@@ -104,6 +104,16 @@ def power_scan_top(state, ground, f_set_hz):
     return min(top, mw.POWMAX_W)
 
 
+def calibration_note():
+    """Which pi-power calibration assumption the absolute powers and Rabi
+    frequencies use (``mw.CAL_IS_BARE_ATOM``; an open question, see
+    ``lattice_sim.spectra.microwave``)."""
+    if mw.CAL_IS_BARE_ATOM:
+        return ("calibration assigned to the free atom (s = 1; open: if it was taken on the lattice carrier, "
+                "s = 0.84, every Rabi frequency is 1.19x lower)")
+    return "calibration assigned to the lattice carrier"
+
+
 def first_maximum(x, y):
     """(x, y, interior) of the first local maximum of a sampled curve; without
     one, the largest point and interior = False."""
@@ -128,7 +138,8 @@ def draw_pulse_tab(fig, se, pulse, response, ground, power_scan, f_set_hz, power
     se._finish(a, "Time from the pulse start (ms)", "Rabi frequency Ω/2π (kHz)",
                "Rabi frequency of the set pulse, coupling s = 1")
     se._note(a, f"{SHAPE_LABELS[pulse.shape]}, {pulse.duration_s * 1e3:.3f} ms, {power_w:.4g} W\n"
-                f"peak {pulse.rabi_hz * 1e-3:.3f} kHz, area {mw.pulse_area(pulse):.3f} cycles")
+                f"peak {pulse.rabi_hz * 1e-3:.3f} kHz, area {mw.pulse_area(pulse):.3f} cycles\n"
+                + ("calibration: free atom (s = 1)" if mw.CAL_IS_BARE_ATOM else "calibration: lattice carrier"))
     tt = np.repeat(t, 2)[1:-1]
     ff = np.column_stack([f0, f1]).ravel() * 1e-3
     b.plot(tt, ff, color=se.CURRENT_COLOUR, lw=1.2)
@@ -328,7 +339,11 @@ class MicrowaveExtension:
         s = 1.0
         if on_carrier:
             lines = self.lines(self.app.result["sp"])
-            s = ground_lines(lines)[("", 0)][1]
+            s = ground_lines(lines).get(("", 0), (0.0, 0.0))[1]
+            if not s > 0:
+                # wells apart (mid angles): no carrier on any site, so no pi power
+                self.readout.configure(text="no carrier at these settings (coupling s = 0): no π power")
+                return
         p = mw.pi_power(self.state["shape"], self.state["duration_ms"] * 1e-3, self.state["cal_w"], scale=s)
         p = min(p, mw.POWMAX_W)
         self.rows["power_w"].set(p)
@@ -400,12 +415,15 @@ class MicrowaveExtension:
         p = self.pulse()
         lines = self.lines(self.app.result["sp"])
         g = ground_lines(lines)
-        text = (f"Peak Rabi frequency (s = 1): {p.rabi_hz * 1e-3:.3f} kHz; area {mw.pulse_area(p):.3f} cycles. "
-                f"Ground-state carrier coupling s = {g[('', 0)][1]:.3f}.")
+        text = (f"Peak Rabi frequency (s = 1): {p.rabi_hz * 1e-3:.3f} kHz; area {mw.pulse_area(p):.3f} cycles "
+                f"({calibration_note()}). "
+                f"Ground-state carrier coupling s = {g.get(('', 0), (0.0, 0.0))[1]:.3f}.")
         if r is not None:
             text += (f" Response table {r.q.shape[0]} × {r.q.shape[1]}, ±{r.detuning_hz[-1] * 1e-3:.1f} kHz, "
                      f"{r.seconds:.2f} s.")
-        text += (f" {lines.n_states} initial states kept ({100 * lines.kept_population:.2f} % of the population).")
+        text += (f" {lines.n_states} initial states kept ({100 * lines.kept_population:.2f} % of the population);"
+                 f" {100 * mw.strength_outside_lines(lines):.1f} % of their line strength is in lines not drawn "
+                 "(sidebands on two pairs at once, |Δn| > 2, levels above the cut).")
         self.readout.configure(text=text)
 
     # .. quantities
@@ -435,7 +453,9 @@ class MicrowaveExtension:
         lines = self.lines(sp)
         note = (f"{p.shape} {p.duration_s * 1e3:.3f} ms, peak Rabi {p.rabi_hz * 1e-3:.2f} kHz"
                 + (f", HSR {p.hsr_hz * 1e-3:+.2f} kHz" if p.shape.lower().startswith("afp") else "")
-                + f"; {lines.n_states} initial states ({100 * lines.kept_population:.2f} %)")
+                + f"; {lines.n_states} initial states ({100 * lines.kept_population:.2f} %), "
+                f"{100 * mw.strength_outside_lines(lines):.1f} % of the strength in lines not drawn"
+                + ("; calibration: free atom (s = 1)" if mw.CAL_IS_BARE_ATOM else ""))
         return y, "Transferred population after the pulse", note
 
     def parked(self, sp, axis, dn):
@@ -446,6 +466,9 @@ class MicrowaveExtension:
         return r.transfer_at(self.lines(sp), f) if np.isfinite(f) else float("nan")
 
     def grid_value(self, sp):
+        # runs on the worker thread; self.response is replaced by the Tk thread in done(). Attribute
+        # assignment is atomic in CPython, so at worst one grid uses the previous pulse, and
+        # quantity_changed(GRID_QUANTITY) then invalidates that grid.
         r = self.response
         if r is None:
             return float("nan")

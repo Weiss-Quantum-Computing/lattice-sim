@@ -183,6 +183,51 @@ def test_lines_reproduce_the_spectrum_weights(nominal_lines):
     assert lines.detuning_hz[gx][0] == pytest.approx(sp["carrier_shift_hz"] + (e_l[0] - e_l[1]), abs=1e-6)
 
 
+@pytest.fixture(scope="module", params=[0.97, 1.0], ids=["0.97pi", "pi"])
+def large_angle_lines(request):
+    """The x pair turned to 0.97 pi / pi, where its carrier lies on the neighbouring site k = +1."""
+    from dataclasses import replace
+    site = nominal_site()
+    axes = [replace(c, theta=request.param * np.pi) if c.axis == "x" else c for c in site.axes]
+    sp = spectrum(replace(site, axes=axes), max_dn=1)
+    return sp, mw.lines_from_spectrum(sp, max_dn=1)
+
+
+def test_lines_reproduce_the_spectrum_weights_at_large_angle(large_angle_lines):
+    sp, lines = large_angle_lines
+    x = sp["axes"]["x"]
+    assert x["diagonal_sites"][0] < 1e-6 and x["diagonal_sites"][1] > 0.7       # carrier on site k = +1
+    w = lines.population * lines.scale ** 2
+    car = lines.axis == ""
+    assert np.sum(w[car]) == pytest.approx(sp["carrier_weight"], rel=2e-4)
+    for (ax, dn), (off, wt) in collapse_lines(sp["lines"]).items():
+        sel = (lines.axis == ax) & (lines.dn == dn)
+        assert np.sum(w[sel]) == pytest.approx(wt, rel=2e-4, abs=1e-9)
+    # the lines hold the spectrum's whole listed strength (carrier + sidebands, all sites)
+    assert np.sum(w) == pytest.approx(sp["strength_in_lines"], rel=2e-4)
+    assert mw.strength_outside_lines(lines) == pytest.approx(1 - np.sum(w) / lines.kept_population, abs=1e-12)
+
+
+def test_scan_sees_the_neighbour_site_carrier(large_angle_lines):
+    """A weak pulse's scan integrates to sum p s^2 (the strength of every line, carrier
+    included), and a pi pulse on the carrier transfers: the scan does not read 0 near pi."""
+    sp, lines = large_angle_lines
+    weak = BLACKMAN_06.with_rabi(0.05 * BLACKMAN_06.rabi_hz)          # linear regime: P = s^2 x shape
+    r = mw.build_response(weak, 60e3)
+    f = np.linspace(-60e3, 60e3, 24001)
+    unit = np.sum(r.row(1.0)) * r.step_hz                              # integral of one s = 1 line
+    total = np.sum(r.scan_sum(lines, f)) * (f[1] - f[0]) / unit
+    assert total == pytest.approx(np.sum(lines.population * lines.scale ** 2), rel=2e-3)
+    assert total == pytest.approx(sp["strength_in_lines"], rel=2e-3)
+    full = mw.build_response(BLACKMAN_06, 60e3)
+    assert full.transfer_at(lines, sp["carrier_shift_hz"]) > 0.3
+    ext = _extension()
+    s_car = ext.ground_lines(lines)[("", 0)][1]
+    assert s_car > 0.5                                                  # pi power on the carrier is finite
+    assert np.isfinite(mw.pi_power("blackman", 0.6e-3, scale=s_car))
+    assert ("s = 1" in ext.calibration_note()) == mw.CAL_IS_BARE_ATOM
+
+
 def test_power_scan_agrees_with_the_table(nominal_lines):
     sp, lines = nominal_lines
     f_set = sp["carrier_shift_hz"]

@@ -91,7 +91,9 @@ Model. Each line |upper, n> -> |lower, n'> (3D vibrational states) is a
 two-level system driven with Rabi frequency Omega(t) = Omega_peak env(t) s,
 where s = |<n'|n>| is the product over the three axes of the 1D overlaps
 (carrier: the diagonal overlaps; a sideband on axis a: the off-diagonal
-overlap on a and the diagonals on the other two), and detuning
+overlap on a and the diagonals on the other two; the degenerate final
+states on the own and the neighbouring sites summed in quadrature,
+``lines_from_spectrum``), and detuning
 Delta(t) = f_set + sweep(t) - f_line. The lines that start in one initial
 state n combine as successive independent transfers, so the scan signal is
 sum_n p(n) [1 - prod_lines (1 - P(s, f_set - f_line))] over the thermal
@@ -642,6 +644,15 @@ def combine_lines(lines: LineList, p_lines):
     return np.tensordot(lines.state_population, 1.0 - np.exp(log_keep), axes=(0, 0))
 
 
+def _franck_condon_all_sites(axis_data):
+    """|<n'|n>|^2 of one axis summed over the final sites k
+    (``franck_condon_sites``); the k = 0 matrix for a spectrum without them."""
+    sites = axis_data.get("franck_condon_sites")
+    if not sites:
+        return np.asarray(axis_data["franck_condon"], float)
+    return sum(np.asarray(f, float) for f in sites.values())
+
+
 def lines_from_spectrum(sp, states=None, max_dn=MAX_DN, min_population=MIN_POPULATION, max_states=None):
     """Lines of ``sidebands.spectrum`` output for any (upper, lower) pair.
 
@@ -649,16 +660,29 @@ def lines_from_spectrum(sp, states=None, max_dn=MAX_DN, min_population=MIN_POPUL
     below min_population dropped, and all but the max_states most populated;
     ``kept_population`` is what is left); from each, the carrier and the
     |dn| <= max_dn sidebands on one axis at a time (sidebands on two axes at
-    once, second order in the off-diagonal overlaps, are left out). Line
-    frequency = sum over axes of E(upper, n_a) - E(lower, n'_a), measured
-    from the free-atom line, as in ``spectrum``. ``states`` defaults to the
-    order of each axis' levels dict. A spectrum without the per-axis
-    ``levels`` (the lattice-grid view drops them) gets harmonic ladders at
-    f_upper_hz / f_lower_hz from its carrier shift (``LineList.harmonic``).
+    once, second order in the off-diagonal overlaps, are left out;
+    ``strength_outside_lines`` says how much that and the level cut leave
+    out). Line frequency = sum over axes of E(upper, n_a) - E(lower, n'_a),
+    measured from the free-atom line, as in ``spectrum``. ``states``
+    defaults to the order of each axis' levels dict. A spectrum without the
+    per-axis ``levels`` (the lattice-grid view drops them) gets harmonic
+    ladders at f_upper_hz / f_lower_hz from its carrier shift
+    (``LineList.harmonic``).
+
+    Final sites. The lower state may end in its well of the atom's own site
+    (k = 0) or of a neighbouring one (k = +/-1; towards theta = +/-pi all of
+    the carrier is on k = +/-1). Those final states are orthogonal and, in
+    the periodic lattice, degenerate (``spectrum`` puts their lines at the
+    same frequency), so the initial state couples to one bright combination
+    of them with s^2 = sum_k s_k^2: each line here carries the coupling
+    summed in quadrature over the sites (per axis, the Franck-Condon matrix
+    summed over k), which is the exact two-level dynamics for degenerate
+    final states (not the amplitude sum, and not independent lines, which
+    ``combine_lines`` would treat as successive transfers).
     """
     axes = list(sp["axes"])
     data = [sp["axes"][ax] for ax in axes]
-    amp = [np.sqrt(np.clip(d["franck_condon"], 0.0, None)) for d in data]     # (n_lower, n_upper)
+    amp = [np.sqrt(np.clip(_franck_condon_all_sites(d), 0.0, None)) for d in data]     # (n_lower, n_upper)
     harmonic = any("levels" not in d for d in data)
     if harmonic:
         share = float(sp["carrier_shift_hz"]) / len(axes)
@@ -713,6 +737,19 @@ def lines_from_spectrum(sp, states=None, max_dn=MAX_DN, min_population=MIN_POPUL
                      np.concatenate(lab_dn), float(p0.sum()))
     out.harmonic = harmonic
     return out
+
+
+def strength_outside_lines(lines: LineList):
+    """Fraction of the kept initial states' line strength that no listed line
+    carries: 1 - sum p s^2 / kept_population. Every initial state's
+    strength over all final states is 1 (completeness of the lower state's
+    levels and sites), so this is what the line list leaves out: sidebands
+    on two axes at once, |dn| > max_dn, final levels above the level cut and
+    sites not solved. 0 for a list without lines."""
+    if lines.kept_population <= 0 or len(lines) == 0:
+        return 0.0
+    inside = float(np.sum(lines.population * lines.scale ** 2)) / lines.kept_population
+    return float(max(0.0, 1.0 - inside))
 
 
 def power_scan(lines: LineList, pulse: Pulse, f_set_hz, power_factors, spread_hz=0.0, reach_hz=None,
