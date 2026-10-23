@@ -128,6 +128,7 @@ GLOBAL_PARAMS = [
 ]
 PARAMS = {p.key: p for p in PAIR_PARAMS + GLOBAL_PARAMS}
 DISPLAY_ONLY = {"width_hz"}
+FIELD_KEYS = {"b_gauss"}         # scans of these stay inside the slider range (no field near 0 G)
 
 
 def default_settings():
@@ -984,6 +985,14 @@ def run_interactive(mainloop=True):
             except ValueError:
                 self.scan_status.configure(text="from, to and points must be numbers")
                 return
+            if not (math.isfinite(lo) and math.isfinite(hi)):
+                self.scan_status.configure(text="from and to must be finite numbers")
+                return
+            if key in FIELD_KEYS:
+                # the |F, m_F> labels need a bias field (sidebands._ranks fails near 0 G): stay on the slider
+                lo, hi = (min(max(v, p.lo), p.hi) for v in (lo, hi))
+                self.scan_lo.set(p.fmt(lo))
+                self.scan_hi.set(p.fmt(hi))
             n = min(max(n, 2), 101)
             values = np.geomspace(lo, hi, n) if p.log and lo > 0 and hi > 0 else np.linspace(lo, hi, n)
             self._scan_cancel = False
