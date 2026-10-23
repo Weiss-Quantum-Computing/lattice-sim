@@ -6,3 +6,5 @@ data/*.npz
 data/*.log
 data/*.png
 data/*.json.bak
+tools/psc_explorer.html
+data/psc_explorer.json
