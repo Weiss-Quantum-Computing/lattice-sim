@@ -55,3 +55,10 @@ values or guesses and are flagged in `scripts/p3_echo_analysis.py`.
 29. **OP heating and darkness**: ground-state fraction after N extra OP pulses on cold atoms (dark-state scatter), and after one deliberate |4,−4⟩ → |3,−3⟩ → OP round trip on cold atoms (recoil heating per OP event). *Enters as* `DARK_EXCURSION_PROB` (default 0) in `cooling/optical_pumping.py`; the model gives 16 / 18 / 10 % per axis for one OP from n = 0.
 30. **Reference frequency definition**: is "Reference fc" the carrier measured at θ = 0 (assumed), and were the −1 / −2 offsets set on cold or hot atoms? The carrier moves by −2.1 / −1.1 / −0.6 kHz (x / y / z) at 12°.
 31. **OP beam direction** relative to the lattice axes (assumed (x̂ + ŷ)/√2), and the ER(θ) of the y and z rotating arms near 0–15°. *Enters as* `OP_BEAM_DIRECTION_LAB`, `EXTINCTION_RATIO` (2×10³ on all axes).
+
+## H. Cluster state
+
+32. **Phase of the first π/2 pulse** relative to the echo π pulse (R_x(π/2), i.e. √X, as in Du, or R_y(π/2)). It decides which atoms carry X- and which Y-type stabilizers, and therefore which atoms get the Z(π/2) correction (even degree for √X). *Enters as* the `phase_q` of the first step of `cluster.sequence.cluster_sequence`.
+33. **The atoms that will receive the readout correction**: is the addressing pattern computed from the imaged filling after sorting and clearing, or planned for the perfect block? With the planned pattern a vacancy costs ~9 % of the recorded stabilizers (findings 2026-10-27).
+34. **A measured echo contrast with the collision step in place** (one axis, then x-y-z), and the parallel-addressing fidelity per atom. *Enters as* `NoiseModel.echo_contrast`, `addressed`, `spectator` in `cluster/sequence.py`; the contrast sets ⟨S_i⟩ almost alone. `PLUS_MOVER_QUBIT` (item 25) fixes only the stabilizer signs.
+

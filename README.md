@@ -39,6 +39,7 @@ Transport ramps come from `Weiss-Quantum-Computing/Transport-Optimizer`.
 | P4 | two-atom gate | overlap-vs-voltage table (0.1 overlap at 4340 V, 0.5 at 4785 V). Done for x (`tests/test_collision.py`): reproduced to 1 V; collisional phase, spin-exchange leakage and stop voltages for both pairs (`figures/p4_collision.png`); channel scattering lengths open |
 | P5 | full sequences | interleaved x/y/z transport with extended hold; error budget by noise source |
 | tools | projection cooling | lab cooling sequence against measured 3D ground fraction (Du: 0.96). Model done (`lattice_sim/cooling/`, `figures/psc_cooling.png`); predicts 0.979 at 5 uK, acceptance open; interactive `tools/psc_explorer.html` |
+| tools | cluster state | stabilizers of the experiment's sequences for any filling; Stim and an explicit state vector agree; browser engine matches Stim (`lattice_sim/cluster/`, `tools/cluster_explorer.html`, `figures/cluster_stabilizers.png`) |
 | tools | sideband explorer | measured carrier and sideband spectra against alignment settings (open). `scripts/sideband_explorer.py` (interactive), `figures/sidebands_alignment.png`; `scripts/score_suite.py` scores the lab's ILC ramp suites |
 
 A standing question for P1-P3: transport pair |3,-1>/|3,+1> or |3,-3>/|3,+3>.

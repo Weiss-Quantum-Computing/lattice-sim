@@ -1,0 +1,962 @@
+<title>Cluster State Explorer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap">
+<style>
+/* Layout: the lattice-sim lab-notebook system (as the projection-cooling explorer).
+   Left column: what is in the lattice and what is done to it (filling, sequence, noise).
+   Right column: the lattice after any step, its plane-by-plane slices, the selected
+   site's stabilizer, then information flow and the stabilizer measurement. */
+:root {
+  --bg: #f3f5f6; --surface: #ffffff; --ink: #142029; --muted: #5a6a76; --rule: #d6dde2;
+  --accent: #1d4f91; --accent-soft: #e3ecf7;
+  --ax-x: #13808c; --ax-y: #b9821a; --ax-z: #7b4ea3;
+  --px: #c0432c; --py: #2e8a57; --pz: #2456b8;
+  --good: #2e8a57; --warn: #c48a12; --bad: #b8432f;
+  --grid: #e6ebee; --empty: #c3ccd2; --atom: #8695a0;
+  --f-display: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e1418; --surface: #151d23; --ink: #e2e8ed; --muted: #95a4b0; --rule: #2a353e;
+  --accent: #7fa8e6; --accent-soft: #1d2a3a;
+  --ax-x: #45bcc7; --ax-y: #e0b04e; --ax-z: #b38ad8;
+  --px: #f08a6f; --py: #5cc28a; --pz: #7d9df0;
+  --good: #5cc28a; --warn: #e4b64a; --bad: #ec7a62; --grid: #1f2a32; --empty: #34414a; --atom: #6f808c;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0e1418; --surface: #151d23; --ink: #e2e8ed; --muted: #95a4b0; --rule: #2a353e;
+  --accent: #7fa8e6; --accent-soft: #1d2a3a;
+  --ax-x: #45bcc7; --ax-y: #e0b04e; --ax-z: #b38ad8;
+  --px: #f08a6f; --py: #5cc28a; --pz: #7d9df0;
+  --good: #5cc28a; --warn: #e4b64a; --bad: #ec7a62; --grid: #1f2a32; --empty: #34414a; --atom: #6f808c;
+  color-scheme: dark }
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)) }
+.wrap { max-width: 1320px; margin: 0 auto; padding-block: 20px 48px; display: grid; gap: 18px }
+header h1 { font-family: var(--f-display); font-weight: 600; font-size: clamp(1.5rem, 3vw, 2rem); margin: 0; text-wrap: balance; letter-spacing: -0.01em }
+header p { margin: 6px 0 0; color: var(--muted); max-width: 84ch }
+.eyebrow { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted) }
+.main { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 18px; align-items: start }
+@media (max-width: 900px) { .main { grid-template-columns: minmax(0, 1fr) } }
+.col { display: grid; gap: 18px; min-width: 0 }
+section { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; display: grid; gap: 10px; min-width: 0; align-content: start }
+section > h2 { font-family: var(--f-display); font-weight: 600; font-size: 1.1rem; margin: 0; text-wrap: balance }
+.lede { margin: -4px 0 0; color: var(--muted); font-size: 12.5px; max-width: 80ch }
+.row { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: end }
+label.ctl { display: grid; gap: 2px; font-size: 11.5px; color: var(--muted) }
+select, input[type=number] { font: inherit; font-family: var(--f-mono); font-size: 12.5px; padding: 3px 5px; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); color: var(--ink) }
+input[type=number] { width: 5em }
+#noise-fields input[type=number] { width: 6.2em }
+input[type=range] { accent-color: var(--accent) }
+button { font: inherit; font-size: 12.5px; padding: 4px 10px; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); color: var(--ink); cursor: pointer }
+button:hover { border-color: var(--accent) }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--surface) }
+button.chip { padding: 2px 8px; font-size: 12px; border-radius: 999px }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
+.presets { display: flex; flex-wrap: wrap; gap: 6px }
+.mono { font-family: var(--f-mono); font-size: 12px }
+.muted { color: var(--muted) }
+.small { font-size: 12px }
+/* sequence list */
+ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px }
+ol.steps li { display: grid; grid-template-columns: 2.2em minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 4px 6px; border: 1px solid var(--rule); border-radius: 4px; font-size: 12.5px; cursor: pointer }
+ol.steps li.cur { border-color: var(--accent); background: var(--accent-soft) }
+ol.steps li .k { font-family: var(--f-mono); color: var(--muted); font-size: 11px }
+ol.steps li .acts { display: flex; gap: 2px }
+ol.steps li .acts button { padding: 0 5px; font-size: 11px; line-height: 1.6 }
+.addstep { display: grid; gap: 8px; padding: 8px; border: 1px dashed var(--rule); border-radius: 4px }
+.tag { display: inline-block; font-family: var(--f-mono); font-size: 10.5px; padding: 0 5px; border-radius: 3px; border: 1px solid var(--rule); color: var(--muted); margin-left: 4px }
+/* view */
+.viewbar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between }
+.canvaswrap { position: relative; width: 100%; border: 1px solid var(--grid); border-radius: 4px; background: var(--bg); touch-action: none }
+canvas { display: block; width: 100%; max-width: 100% }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11.5px; color: var(--muted) }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px }
+.timeline { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center }
+.timeline input { width: 100% }
+.slices { display: flex; flex-wrap: wrap; gap: 10px }
+.slice { display: grid; gap: 2px; justify-items: center }
+.slice canvas { width: auto; border: 1px solid var(--grid); border-radius: 3px; background: var(--bg); cursor: pointer }
+.stab { font-family: var(--f-mono); font-size: 12px; line-height: 1.7; word-break: break-word; overflow-wrap: anywhere }
+.stab .X { color: var(--px); font-weight: 500 } .stab .Y { color: var(--py); font-weight: 500 } .stab .Z { color: var(--pz); font-weight: 500 }
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 12px; font-size: 12.5px }
+.kv dt { color: var(--muted) } .kv dd { margin: 0; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px }
+.grid2 > * { min-width: 0 }
+table { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; width: 100% }
+th, td { text-align: right; padding: 3px 8px; border-bottom: 1px solid var(--grid) }
+th:first-child, td:first-child { text-align: left }
+th { font-weight: 500; color: var(--muted); font-size: 11.5px }
+.tablewrap { overflow-x: auto }
+.note { font-size: 12px; color: var(--muted); max-width: 90ch }
+.note b { color: var(--ink); font-weight: 600 }
+.pill { display: inline-block; padding: 0 7px; border-radius: 999px; font-size: 11.5px; font-family: var(--f-mono); border: 1px solid currentColor }
+.pill.good { color: var(--good) } .pill.warn { color: var(--warn) } .pill.bad { color: var(--bad) }
+svg text { fill: var(--muted); font-family: var(--f-mono); font-size: 10px }
+details summary { cursor: pointer; color: var(--muted); font-size: 12.5px }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">lattice-sim · cluster · Cs 3D lattice, |0⟩ = |3,−1⟩, |1⟩ = |4,+1⟩</div>
+    <h1>Cluster State Explorer</h1>
+    <p>Fill the lattice, build the pulse and collision sequence, and step through it: the stabilizer of any atom, how an injected error spreads and which stabilizers it flips, the entanglement across a cut, and the stabilizer values a measurement configuration would record under the noise budget in <span class="mono">docs/findings.md</span>. Exact Clifford simulation (checked against Stim in <span class="mono">tests/test_cluster.py</span>).</p>
+  </header>
+
+  <div class="main">
+    <div class="col">
+      <section id="sec-fill">
+        <h2>Lattice filling</h2>
+        <div class="presets" id="fill-presets"></div>
+        <div class="row">
+          <label class="ctl">region x <input id="nx" type="number" min="1" max="9"></label>
+          <label class="ctl">y <input id="ny" type="number" min="1" max="9"></label>
+          <label class="ctl">z (planes) <input id="nz" type="number" min="1" max="9"></label>
+          <label class="ctl">pattern
+            <select id="pattern">
+              <option value="block">sorted block</option>
+              <option value="random">random (parity loading)</option>
+              <option value="lines">lines</option>
+              <option value="plane">single plane</option>
+              <option value="full">whole region</option>
+            </select></label>
+        </div>
+        <div class="row" id="pat-block">
+          <label class="ctl">block x <input id="bx" type="number" min="1" max="9"></label>
+          <label class="ctl">y <input id="by" type="number" min="1" max="9"></label>
+          <label class="ctl">z <input id="bz" type="number" min="1" max="9"></label>
+          <label class="ctl">vacancies <input id="vac" type="number" min="0" max="200"></label>
+        </div>
+        <div class="row" id="pat-random">
+          <label class="ctl">filling <input id="frac" type="number" min="0" max="1" step="0.01"></label>
+        </div>
+        <div class="row" id="pat-lines">
+          <label class="ctl">along <select id="laxis"><option>x</option><option>y</option><option>z</option></select></label>
+          <label class="ctl">lines <input id="lcount" type="number" min="1" max="81"></label>
+          <label class="ctl">spacing <input id="lgap" type="number" min="1" max="8"></label>
+        </div>
+        <div class="row" id="pat-plane">
+          <label class="ctl">normal <select id="pnormal"><option>z</option><option>y</option><option>x</option></select></label>
+          <label class="ctl">index <input id="pindex" type="number" min="0" max="8"></label>
+        </div>
+        <div class="row">
+          <label class="ctl">peripheral atoms <input id="periph" type="number" min="0" max="1" step="0.05"></label>
+          <label class="ctl">seed <input id="seed" type="number" min="1" max="9999"></label>
+          <label class="ctl" style="align-self:center"><span><input id="editmode" type="checkbox"> click sites to add / remove atoms</span></label>
+        </div>
+        <div class="small muted" id="fill-summary"></div>
+      </section>
+
+      <section id="sec-seq">
+        <h2>Sequence</h2>
+        <p class="lede">Atoms start in |0⟩ after optical pumping and the map to the qubit basis. Click a step to show the lattice after it.</p>
+        <div class="presets" id="seq-presets"></div>
+        <ol class="steps" id="steps"></ol>
+        <div class="addstep">
+          <div class="row">
+            <label class="ctl">add
+              <select id="a-op">
+                <option value="pulse">qubit pulse R_φ(θ)</option>
+                <option value="rz">addressed phase Z(θ)</option>
+                <option value="collide">collision</option>
+                <option value="measure">state detection</option>
+                <option value="clear">push out atoms</option>
+              </select></label>
+            <label class="ctl" data-for="pulse rz">θ <select id="a-q"><option value="1">π/2</option><option value="2">π</option><option value="3">3π/2</option></select></label>
+            <label class="ctl" data-for="pulse">axis φ <select id="a-ph"><option value="0">x</option><option value="1">y</option><option value="2">−x</option><option value="3">−y</option></select></label>
+            <label class="ctl" data-for="collide">gate <select id="a-mode"><option value="echo">echoed, π/2 per leg</option><option value="single">single leg, φ = π</option></select></label>
+            <label class="ctl" data-for="measure">basis <select id="a-basis"><option value="Z">Z</option><option value="X">X</option><option value="Y">Y</option><option value="centre">own stabilizer letter</option></select></label>
+          </div>
+          <div class="row">
+            <span class="ctl" data-for="collide">axes
+              <span class="mono"><label><input type="checkbox" id="a-x" checked> x</label> <label><input type="checkbox" id="a-y"> y</label> <label><input type="checkbox" id="a-z"> z</label></span></span>
+            <label class="ctl" data-for="pulse rz measure clear">atoms
+              <select id="a-tg">
+                <option value="all">all atoms</option>
+                <option value="A">sublattice A (x+y+z even)</option>
+                <option value="B">sublattice B (x+y+z odd)</option>
+                <option value="even">even degree</option>
+                <option value="odd">odd degree</option>
+                <option value="plane">one plane z = k</option>
+                <option value="periph">outside the sorted block</option>
+                <option value="sel">selected atom(s)</option>
+              </select></label>
+            <label class="ctl" data-for="pulse rz measure clear" id="a-k-wrap">k <input id="a-k" type="number" min="0" max="8" value="0"></label>
+            <button class="primary" id="a-add">Add step</button>
+          </div>
+        </div>
+        <div class="small muted" id="seq-warn"></div>
+      </section>
+
+      <section id="sec-noise">
+        <h2>Noise budget</h2>
+        <p class="lede">Pauli channels per operation; coherent phase errors are twirled. Values per preset are sourced below.</p>
+        <label class="ctl">preset <select id="noise-preset"></select></label>
+        <div class="row" id="noise-fields"></div>
+        <div class="note" id="noise-src"></div>
+      </section>
+    </div>
+
+    <div class="col">
+      <section id="sec-view">
+        <div class="viewbar">
+          <h2 style="margin:0">Lattice after step <span id="stepnum">0</span></h2>
+          <label class="ctl">colour atoms by
+            <select id="view">
+              <option value="stab">stabilizer of the selected atom</option>
+              <option value="letter">each atom's own stabilizer letter</option>
+              <option value="error">injected error</option>
+              <option value="value">⟨S_i⟩ under noise</option>
+              <option value="config">measurement configuration</option>
+            </select></label>
+        </div>
+        <div class="timeline">
+          <button id="prev" aria-label="previous step">◀</button>
+          <input id="tl" type="range" min="0" max="0" value="0" aria-label="step">
+          <button id="next" aria-label="next step">▶</button>
+        </div>
+        <div class="small" id="steplabel"></div>
+        <div class="canvaswrap" id="cw"><canvas id="c3d" height="440"></canvas></div>
+        <div class="legend" id="legend"></div>
+        <div class="small muted">Drag to rotate, scroll to zoom. Click an atom to select it; shift-click picks a second atom.</div>
+        <div>
+          <div class="eyebrow" style="margin-bottom:6px">imaging planes (z), x → right, y ↓</div>
+          <div class="slices" id="slices"></div>
+        </div>
+      </section>
+
+      <div class="grid2">
+        <section id="sec-site">
+          <h2>Selected atom</h2>
+          <dl class="kv" id="site-kv"></dl>
+          <div class="stab" id="site-stab"></div>
+          <div class="row">
+            <span class="small muted">inject after step <span id="inj-step">0</span>:</span>
+            <button class="chip" data-inj="X">X error</button>
+            <button class="chip" data-inj="Y">Y error</button>
+            <button class="chip" data-inj="Z">Z error</button>
+            <button class="chip" id="inj-clear">clear</button>
+          </div>
+          <div class="small" id="err-summary"></div>
+        </section>
+
+        <section id="sec-ent">
+          <h2>Information flow</h2>
+          <div class="row">
+            <label class="ctl">cut normal <select id="cut-axis"><option>x</option><option>y</option><option>z</option></select></label>
+            <label class="ctl">region A: coordinate &lt; <input id="cut-pos" type="number" min="1" max="8"></label>
+          </div>
+          <div id="ent-chart"></div>
+          <dl class="kv" id="pair-kv"></dl>
+          <div class="row"><button id="bell">Localize a Bell pair between the two atoms</button></div>
+          <div class="small muted" id="bell-note"></div>
+        </section>
+      </div>
+
+      <section id="sec-meas">
+        <h2>Stabilizer measurement</h2>
+        <p class="lede">Atoms of one sublattice are detected in their stabilizer letter, the other sublattice in Z; a stabilizer is recorded when every atom it acts on was detected in its letter. Values are relative to the ideal sign. Uses the sequence up to its first detection or push-out.</p>
+        <div class="row">
+          <label class="ctl">configuration
+            <select id="cfg">
+              <option value="XZ-A">X on A, Z on B (Du XZX)</option>
+              <option value="XZ-B">X on B, Z on A</option>
+              <option value="YZ-A">Y on A, Z on B</option>
+              <option value="YZ-B">Y on B, Z on A</option>
+              <option value="centre-A">own letter on A, Z on B</option>
+              <option value="centre-B">own letter on B, Z on A</option>
+            </select></label>
+          <label class="ctl">shots <select id="shots"><option>1024</option><option selected>4096</option><option>16384</option></select></label>
+          <button class="primary" id="run-cfg">Sample</button>
+        </div>
+        <div id="meas-summary" class="small"></div>
+        <div class="tablewrap"><table id="meas-table"></table></div>
+      </section>
+
+      <section id="sec-notes">
+        <h2>Model</h2>
+        <div class="note">
+          <p><b>Gate.</b> In a leg, the |3,+m⟩ component of the atom at r moves +ê and meets the |3,−m⟩ component of the atom at r + ê, so |q_r = 1, q_s = 0⟩ gains e<sup>−iφ</sup> (|4,+1⟩ maps to the +ê mover; unconfirmed, it changes stabilizer signs only). With the π pulse between legs the bond gate is exp(+iφ/2 ZZ), followed by X on every atom: φ = π/2 per leg gives √ZZ<sup>†</sup> (Du Sec. 4.2.2.3). A single leg is Clifford only for φ = π. All atoms receive the global pulses, including isolated ones.</p>
+          <p><b>Stabilizer letter.</b> After the √X start, S<sub>i</sub> = ±P<sub>i</sub>∏Z<sub>nb</sub> with P = X for an odd number of collided neighbours and Y for an even number. Du (p. 57) lists the opposite letters, which belong to a |+⟩ start (R<sub>y</sub>(π/2) first pulse). Z(π/2) on the even-degree atoms therefore turns every letter into X, and the two configurations XZ-A and XZ-B then record all stabilizers. A vacancy or an uncleared peripheral atom changes the parity of each of its neighbours and flips their letters.</p>
+          <p><b>Noise.</b> Echo contrast C per collision step enters as a Z error (1 − C)/2 on every atom. A pair-phase error δ ~ N(offset, σ) enters as a ZZ error ⟨sin²(δ/4)⟩ per bond. Spin-exchange leakage enters as two-qubit depolarizing noise. The fidelity shown is exact for this Pauli model (the probability that the accumulated error flips no stabilizer); the bound 1 − ½Σ(1 − ⟨S<sub>i</sub>⟩) holds for any state.</p>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+/*__ENGINE__*/
+</script>
+<script>
+"use strict";
+const E = window.ClusterEngine;
+const PRESETS = /*__PRESETS__*/;
+const $ = (id) => document.getElementById(id);
+const AX = "xyz";
+const QL = { 1: "π/2", 2: "π", 3: "3π/2" }, PHL = { 0: "x", 1: "y", 2: "−x", 3: "−y" };
+const NOISE_FIELDS = [
+  ["prep", "preparation X", 1e-4], ["pulse", "global pulse", 1e-4], ["addressed", "addressed target", 1e-4],
+  ["spectator", "addressed spectator Z", 1e-4], ["echo_contrast", "echo contrast C", 0.005],
+  ["phase_offset", "Φ offset (rad)", 0.01], ["phase_sigma", "Φ rms (rad)", 0.01], ["leak", "leakage / bond", 1e-4],
+  ["readout", "detection flip", 1e-4]];
+
+function mulberry32(a) { return function () { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+// ------------------------------------------------------------------ state
+const S = {
+  shape: [6, 6, 5], pattern: "block", block: [4, 4, 3], vac: 0, frac: 0.54, laxis: "x", lcount: 3, lgap: 2,
+  pnormal: "z", pindex: 2, periph: 0, seed: 1, toggles: new Set(),
+  steps: [], noise: Object.assign({}, PRESETS["|3,±3⟩ sequential"].noise), preset: "|3,±3⟩ sequential",
+  view: "stab", step: 0, sel: null, sel2: null, err: null, cut: { axis: "x", pos: 3 },
+  yaw: -0.62, pitch: 0.48, zoom: 1, cfgResult: null, outcomeSeed: 1,
+};
+let D = null;        // derived: occupancy, spec, program, snapshots, ...
+
+function regionN() { return S.shape[0] * S.shape[1] * S.shape[2]; }
+function idx(x, y, z) { return x + S.shape[0] * (y + S.shape[1] * z); }
+function coords(i) { const [nx, ny] = S.shape; return [i % nx, Math.floor(i / nx) % ny, Math.floor(i / (nx * ny))]; }
+function blockOrigin() { return [0, 1, 2].map((k) => Math.max(0, Math.floor((S.shape[k] - Math.min(S.block[k], S.shape[k])) / 2))); }
+function inBlock(c) { const o = blockOrigin(); return [0, 1, 2].every((k) => c[k] >= o[k] && c[k] < o[k] + S.block[k]); }
+
+function buildOccupancy() {
+  const n = regionN(), occ = new Uint8Array(n), rng = mulberry32(S.seed * 7919);
+  for (let i = 0; i < n; i++) {
+    const c = coords(i);
+    if (S.pattern === "block") occ[i] = inBlock(c) ? 1 : 0;
+    else if (S.pattern === "random") occ[i] = rng() < S.frac ? 1 : 0;
+    else if (S.pattern === "full") occ[i] = 1;
+    else if (S.pattern === "plane") occ[i] = c["xyz".indexOf(S.pnormal)] === S.pindex ? 1 : 0;
+  }
+  if (S.pattern === "lines") {
+    const ax = AX.indexOf(S.laxis), o = [0, 1, 2].filter((k) => k !== ax), pos = [];
+    const mid = o.map((k) => Math.floor(S.shape[k] / 2));
+    for (let a = 0; a < S.shape[o[0]]; a += S.lgap) for (let b = mid[1] % S.lgap; b < S.shape[o[1]]; b += S.lgap) pos.push([a, b]);
+    pos.sort((p, q) => (Math.abs(p[0] - mid[0]) + Math.abs(p[1] - mid[1])) - (Math.abs(q[0] - mid[0]) + Math.abs(q[1] - mid[1])));
+    for (const [a, b] of pos.slice(0, S.lcount)) for (let i = 0; i < n; i++) { const c = coords(i); if (c[o[0]] === a && c[o[1]] === b) occ[i] = 1; }
+  }
+  if (S.pattern === "block" && S.vac > 0) {
+    const filled = []; for (let i = 0; i < n; i++) if (occ[i]) filled.push(i);
+    for (let k = 0; k < Math.min(S.vac, filled.length); k++) { const j = k + Math.floor(rng() * (filled.length - k)); [filled[k], filled[j]] = [filled[j], filled[k]]; occ[filled[k]] = 0; }
+  }
+  if (S.periph > 0) {
+    const add = [];
+    for (let i = 0; i < n; i++) {
+      if (occ[i]) continue;
+      const c = coords(i);
+      let adj = false;
+      for (let k = 0; k < 3 && !adj; k++) for (const d of [-1, 1]) { const q = c.slice(); q[k] += d; if (q[k] >= 0 && q[k] < S.shape[k] && occ[idx(...q)]) { adj = true; break; } }
+      if (adj && rng() < S.periph) add.push(i);
+    }
+    for (const i of add) occ[i] = 1;
+  }
+  for (const i of S.toggles) if (i < n) occ[i] ^= 1;
+  return occ;
+}
+
+// ------------------------------------------------------------------ steps
+function collidedAxes() { let a = ""; for (const st of S.steps) if (st.op === "collide") for (const c of st.axes) if (!a.includes(c)) a += c; return a; }
+function degreesOf(occ, axes) {
+  const n = occ.length, deg = new Int32Array(n);
+  for (const a of axes) for (const [r, s] of E.bondsOf(E.regionOf({ shape: S.shape }), occ, a)) { deg[r]++; deg[s]++; }
+  return deg;
+}
+function resolveTargets(st, occ, deg) {
+  const n = occ.length, out = [];
+  if (st.tg === "all") return null;
+  if (st.tg === "list") return st.list.slice();
+  for (let i = 0; i < n; i++) {
+    if (!occ[i]) continue;
+    const c = coords(i), p = (c[0] + c[1] + c[2]) & 1;
+    if ((st.tg === "A" && p === 0) || (st.tg === "B" && p === 1) || (st.tg === "even" && deg[i] % 2 === 0)
+      || (st.tg === "odd" && deg[i] % 2 === 1) || (st.tg === "plane" && c[2] === st.k)
+      || (st.tg === "periph" && !(S.pattern === "block" && inBlock(c)))) out.push(i);
+  }
+  if (st.tg === "sel") return [S.sel, S.sel2].filter((v) => v != null && occ[v]);
+  return out;
+}
+function tgLabel(st, sites) {
+  const names = { all: "all atoms", A: "sublattice A", B: "sublattice B", even: "even-degree atoms", odd: "odd-degree atoms",
+    plane: `plane z = ${st.k}`, periph: "atoms outside the block", sel: "selected", list: "listed atoms" };
+  return names[st.tg] + (sites ? ` (${sites.length})` : "");
+}
+function stepLabel(st, sites) {
+  if (st.op === "pulse") return `R<sub>${PHL[st.ph]}</sub>(${QL[st.q]}) · ${tgLabel(st, sites)}${st.tg === "all" ? "" : '<span class="tag">addressed</span>'}`;
+  if (st.op === "rz") return `Z(${QL[st.q]}) · ${tgLabel(st, sites)}<span class="tag">addressed</span>`;
+  if (st.op === "collide") return `collide ${st.axes.split("").join("-")} · ${st.mode === "echo" ? "echoed, π/2 per leg" : "single leg, φ = π"}${st.axes.length > 1 && st.mode === "echo" ? '<span class="tag">interleaved</span>' : ""}`;
+  if (st.op === "measure" && st.bases) return `detect: Z off the path, own letter along it · ${tgLabel(st, sites)}`;
+  if (st.op === "measure") return `detect in ${st.basis === "centre" ? "own letter" : st.basis}${st.bases ? " (per atom)" : ""} · ${tgLabel(st, sites)}`;
+  if (st.op === "clear") return `push out · ${tgLabel(st, sites)}`;
+  return st.op;
+}
+
+function buildSpec(occ) {
+  // push-outs before any qubit operation (Du's clearing of peripheral atoms) act on the filling
+  for (const st of S.steps) {
+    if (st.op !== "clear") break;
+    const sites = resolveTargets(st, occ, degreesOf(occ, collidedAxes()));
+    st._removed = sites || Array.from(occ.keys()).filter((i) => occ[i]);
+    for (const i of st._removed) occ[i] = 0;
+  }
+  const deg = degreesOf(occ, collidedAxes());
+  const steps = [], labels = [];
+  // centre letters (needed for "own letter" detection) come from the unitary prefix
+  let letters = null;
+  const getLetters = (sofar) => {
+    if (letters) return letters;
+    const pre = { shape: S.shape, occupancy: Array.from(occ), steps: sofar.filter((s) => s.op !== "measure" && s.op !== "clear") };
+    const k = E.unitaryStepCount(pre), stabs = E.siteStabilizers(E.prefixSpec(pre, k));
+    letters = {}; for (const [i, r] of Object.entries(stabs)) letters[i] = r.ops[i] || "Z";
+    return letters;
+  };
+  let leading = true;
+  for (const st of S.steps) {
+    const sites = resolveTargets(st, occ, deg);
+    let es;
+    if (st.op === "clear" && leading) {
+      steps.push({ op: "pulse", q: 0, phase_q: 0, sites: [] });
+      labels.push(stepLabel(st, st._removed) + '<span class="tag">before entangling</span>');
+      continue;
+    }
+    leading = false;
+    if (st.op === "pulse") es = { op: "pulse", q: st.q, phase_q: st.ph, sites };
+    else if (st.op === "rz") es = { op: "rz", q: st.q, sites: sites == null ? Array.from(occ).map((v, i) => (v ? i : -1)).filter((i) => i >= 0) : sites };
+    else if (st.op === "collide") es = { op: "collide", axes: st.axes, mode: st.mode };
+    else if (st.op === "measure") {
+      if (st.bases) es = { op: "measure", bases: st.bases, sites };
+      else if (st.basis === "centre") { const L = getLetters(steps); const b = {}; for (const i of (sites || Array.from(occ).map((v, i) => (v ? i : -1)).filter((i) => i >= 0))) b[i] = L[i] || "Z"; es = { op: "measure", bases: b, sites }; }
+      else es = { op: "measure", basis: st.basis, sites };
+    } else if (st.op === "clear") es = { op: "clear", sites: sites == null ? null : sites };
+    steps.push(es);
+    labels.push(stepLabel(st, sites));
+  }
+  return { spec: { shape: S.shape.slice(), occupancy: Array.from(occ), steps }, labels, deg };
+}
+
+// ------------------------------------------------------------------ derive
+function derive() {
+  const occ = buildOccupancy();
+  const { spec, labels, deg } = buildSpec(occ);
+  const prog = E.compile(spec);
+  const run = E.runTableau(prog, { rand: mulberry32(S.outcomeSeed) });
+  const nU = E.unitaryStepCount(spec);
+  D = { occ, spec, labels, deg, prog, run, nU };
+  S.step = Math.min(S.step, spec.steps.length);
+  computeEntropySeries();
+  computeExact();
+}
+function occAt(k) { return k === 0 ? D.occ : D.prog.steps[k - 1].occAfter.map((v) => (v ? 1 : 0)); }
+function computeEntropySeries() {
+  const ax = AX.indexOf(S.cut.axis), A = [];
+  for (let i = 0; i < D.occ.length; i++) if (coords(i)[ax] < S.cut.pos) A.push(i);
+  D.cutA = A;
+  D.entropy = D.run.snaps.map((t) => t.entropy(A));
+}
+let exactTimer = null;
+function computeExact() {
+  D.exact = null;
+  clearTimeout(exactTimer);
+  exactTimer = setTimeout(() => {
+    try { D.exact = E.sampleExact(D.spec, S.noise, 4096, mulberry32(S.seed + 101)); } catch (e) { D.exact = null; }
+    renderAll(true);
+  }, 30);
+}
+
+// ------------------------------------------------------------------ colours
+let C = {};
+function readTokens() {
+  const cs = getComputedStyle(document.documentElement), g = (k) => cs.getPropertyValue(k).trim();
+  C = { ink: g("--ink"), muted: g("--muted"), rule: g("--rule"), grid: g("--grid"), bg: g("--bg"), surface: g("--surface"),
+    accent: g("--accent"), X: g("--px"), Y: g("--py"), Z: g("--pz"), ax: { x: g("--ax-x"), y: g("--ax-y"), z: g("--ax-z") },
+    good: g("--good"), warn: g("--warn"), bad: g("--bad"), empty: g("--empty"), atom: g("--atom") };
+}
+function hex2rgb(h) { h = h.replace("#", ""); if (h.length === 3) h = h.split("").map((c) => c + c).join(""); const v = parseInt(h, 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255]; }
+function mix(a, b, t) { const p = hex2rgb(a), q = hex2rgb(b); return `rgb(${p.map((v, k) => Math.round(v + (q[k] - v) * t)).join(",")})`; }
+function valueColour(v) { // <S> in [-1, 1]: 1 good, 0.5 warn, <=0 bad
+  if (v >= 0.5) return mix(C.warn, C.good, (v - 0.5) / 0.5);
+  return mix(C.bad, C.warn, Math.max(0, v) / 0.5);
+}
+
+// per-site appearance for the current view: {fill, letter, ring}
+function siteLook(i, k) {
+  const occ = occAt(k);
+  if (!occ[i]) return null;
+  const tab = D.run.snaps[k];
+  if (S.view === "stab") {
+    if (S.sel == null) return { fill: C.atom };
+    const r = tab.row(S.sel), L = r.ops[i];
+    return L ? { fill: C[L], letter: L, ring: i === S.sel } : { fill: C.atom, dim: true };
+  }
+  if (S.view === "letter") { const L = tab.row(i).ops[i] || "I"; return { fill: L === "I" ? C.atom : C[L], letter: L === "I" ? "" : L }; }
+  if (S.view === "error") {
+    const e = errorAt(k);
+    if (!e) return { fill: C.atom, dim: true };
+    const L = e.pauli[i];
+    const flipped = e.flips && e.flips.has(i);
+    return L ? { fill: C[L], letter: L, ring: flipped } : { fill: C.atom, dim: !flipped, ring: flipped };
+  }
+  if (S.view === "value") {
+    if (!D.exact || D.exact.means[i] == null) return { fill: C.atom };
+    return { fill: valueColour(D.exact.means[i]) };
+  }
+  if (S.view === "config") {
+    const r = S.cfgResult;
+    if (!r) return { fill: C.atom };
+    const b = r.bases[i];
+    const v = r.values[i];
+    return { fill: v ? valueColour(v[0]) : C.atom, letter: b, dim: !v };
+  }
+  return { fill: C.atom };
+}
+
+// ------------------------------------------------------------------ error propagation
+function errorAt(k) {
+  if (!S.err || k < S.err.step) return null;
+  if (!D.errSeries || D.errKey !== JSON.stringify([S.err, D.spec])) {
+    const ser = E.propagate(D.prog, S.err.step, { [S.err.site]: S.err.pauli });
+    D.errSeries = ser; D.errKey = JSON.stringify([S.err, D.spec]);
+  }
+  const pauli = k === S.err.step ? { [S.err.site]: S.err.pauli } : D.errSeries[k - S.err.step - 1].pauli;
+  // stabilizers (rows) at step k that anticommute with the error
+  const tab = D.run.snaps[k], flips = new Set(), occ = occAt(k);
+  for (let i = 0; i < occ.length; i++) {
+    if (!occ[i]) continue;
+    const r = tab.row(i);
+    let a = 0;
+    for (const [q, L] of Object.entries(pauli)) { const M = r.ops[q]; if (M && M !== L) a ^= 1; }
+    if (a) flips.add(i);
+  }
+  const outFlips = [];
+  for (let j = S.err.step; j < k; j++) { const f = D.errSeries[j - S.err.step].flippedOutcomes; if (f) outFlips.push(...f); }
+  return { pauli, flips, outFlips };
+}
+
+// ------------------------------------------------------------------ 3D view
+const cv = $("c3d"), ctx = cv.getContext("2d");
+let proj = [];   // [{i, x, y, r}]
+function sizeCanvas(c, cssW, cssH) {
+  const dpr = window.devicePixelRatio || 1;
+  c.width = Math.round(cssW * dpr); c.height = Math.round(cssH * dpr);
+  c.style.width = cssW + "px"; c.style.height = cssH + "px";
+  return dpr;
+}
+function draw3d() {
+  const W = $("cw").clientWidth, H = Math.round(Math.min(460, Math.max(300, W * 0.62)));
+  const dpr = sizeCanvas(cv, W, H);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  const [nx, ny, nz] = S.shape, k = S.step, occ = occAt(k);
+  const cx = (nx - 1) / 2, cy = (ny - 1) / 2, cz = (nz - 1) / 2;
+  const cyaw = Math.cos(S.yaw), syaw = Math.sin(S.yaw), cp = Math.cos(S.pitch), sp = Math.sin(S.pitch);
+  const ext = Math.max(nx, ny, nz);
+  const scale = S.zoom * Math.min(W, H) / (ext * 1.2 + 0.6);
+  // lab frame: x right, y into the screen (horizontal), z up (imaging axis vertical on screen)
+  const P = (x, y, z) => {
+    const X = x - cx, Yv = y - cy, Zv = z - cz;
+    const x1 = cyaw * X - syaw * Yv, y1 = syaw * X + cyaw * Yv;
+    const yz = cp * y1 - sp * Zv, zz = sp * y1 + cp * Zv;
+    const persp = 1 / (1 + yz * 0.04);
+    return [W / 2 + x1 * scale * persp, H / 2 - zz * scale * persp, yz, persp];
+  };
+  // axes triad
+  const o = P(-0.9, -0.9, -0.9);
+  for (const [a, v] of [["x", [1.6, 0, 0]], ["y", [0, 1.6, 0]], ["z", [0, 0, 1.6]]]) {
+    const e = P(-0.9 + v[0], -0.9 + v[1], -0.9 + v[2]);
+    ctx.strokeStyle = C.ax[a]; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(o[0], o[1]); ctx.lineTo(e[0], e[1]); ctx.stroke();
+    ctx.fillStyle = C.ax[a]; ctx.font = "11px " + getComputedStyle(document.body).getPropertyValue("--f-mono"); ctx.fillText(a, e[0] + 3, e[1] - 3);
+  }
+  // bonds done so far
+  const items = [];
+  for (let j = 0; j < k; j++) {
+    const st = D.prog.steps[j];
+    if (!st.bonds) continue;
+    for (const a of Object.keys(st.bonds)) for (const [r, s] of st.bonds[a]) {
+      const pr = P(...coords(r)), ps = P(...coords(s));
+      items.push({ z: (pr[2] + ps[2]) / 2, draw: () => { ctx.strokeStyle = C.ax[a]; ctx.globalAlpha = 0.55; ctx.lineWidth = 2.2 * Math.min(pr[3], ps[3]); ctx.beginPath(); ctx.moveTo(pr[0], pr[1]); ctx.lineTo(ps[0], ps[1]); ctx.stroke(); ctx.globalAlpha = 1; } });
+    }
+  }
+  proj = [];
+  const rad = Math.max(3, Math.min(13, scale * 0.17));
+  for (let i = 0; i < occ.length; i++) {
+    const p = P(...coords(i));
+    if (!occ[i]) {
+      items.push({ z: p[2], draw: () => { ctx.fillStyle = C.empty; ctx.beginPath(); ctx.arc(p[0], p[1], 1.6 * p[3], 0, 7); ctx.fill(); } });
+      proj.push({ i, x: p[0], y: p[1], r: rad * p[3], empty: true });
+      continue;
+    }
+    const look = siteLook(i, k) || { fill: C.atom };
+    const r = rad * p[3];
+    proj.push({ i, x: p[0], y: p[1], r });
+    items.push({ z: p[2], draw: () => {
+      ctx.globalAlpha = look.dim ? 0.45 : 1;
+      ctx.fillStyle = look.fill; ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, 7); ctx.fill();
+      ctx.globalAlpha = 1;
+      if (look.ring || i === S.sel || i === S.sel2) { ctx.strokeStyle = i === S.sel || i === S.sel2 ? C.ink : C.bad; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p[0], p[1], r + 2.5, 0, 7); ctx.stroke(); }
+      if (look.letter && r >= 7) { ctx.fillStyle = C.surface; ctx.font = `600 ${Math.round(r * 1.05)}px ${getComputedStyle(document.body).getPropertyValue("--f-mono")}`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(look.letter, p[0], p[1] + 0.5); ctx.textAlign = "start"; ctx.textBaseline = "alphabetic"; }
+    } });
+  }
+  items.sort((a, b) => b.z - a.z);
+  for (const it of items) it.draw();
+}
+function pick(px, py) {
+  let best = null, bd = 1e9;
+  for (const p of proj) { const d = Math.hypot(p.x - px, p.y - py); if (d < Math.max(p.r, 6) + 3 && d < bd) { bd = d; best = p; } }
+  return best;
+}
+let drag = null;
+cv.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, yaw: S.yaw, pitch: S.pitch, moved: false }; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener("pointermove", (e) => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+  if (drag.moved) { S.yaw = drag.yaw + dx * 0.008; S.pitch = Math.max(-1.45, Math.min(1.45, drag.pitch + dy * 0.008)); draw3d(); }
+});
+cv.addEventListener("pointerup", (e) => {
+  const d = drag; drag = null;
+  if (!d || d.moved) return;
+  const rect = cv.getBoundingClientRect(), p = pick(e.clientX - rect.left, e.clientY - rect.top);
+  if (p) clickSite(p.i, e.shiftKey);
+});
+cv.addEventListener("wheel", (e) => { e.preventDefault(); S.zoom = Math.max(0.5, Math.min(3, S.zoom * (e.deltaY < 0 ? 1.1 : 0.91))); draw3d(); }, { passive: false });
+
+function clickSite(i, shift) {
+  if ($("editmode").checked) {
+    if (S.toggles.has(i)) S.toggles.delete(i); else S.toggles.add(i);
+    S.cfgResult = null; derive(); renderAll(); return;
+  }
+  if (!occAt(S.step)[i] && !D.occ[i]) return;
+  if (shift && S.sel != null && i !== S.sel) S.sel2 = i;
+  else { S.sel = i; if (S.sel2 === i) S.sel2 = null; }
+  renderAll(true);
+}
+
+// ------------------------------------------------------------------ slices
+function drawSlices() {
+  const box = $("slices"), [nx, ny, nz] = S.shape, k = S.step, occ = occAt(k);
+  const cell = Math.max(10, Math.min(22, Math.floor(260 / Math.max(nx, ny))));
+  if (box.children.length !== nz || box.dataset.key !== `${nx},${ny},${cell}`) {
+    box.innerHTML = ""; box.dataset.key = `${nx},${ny},${cell}`;
+    for (let z = 0; z < nz; z++) {
+      const d = document.createElement("div"); d.className = "slice";
+      const c = document.createElement("canvas"); c.dataset.z = z;
+      const lab = document.createElement("div"); lab.className = "mono muted"; lab.style.fontSize = "11px"; lab.textContent = `z = ${z}`;
+      d.append(c, lab); box.append(d);
+      c.addEventListener("click", (e) => {
+        const rect = c.getBoundingClientRect(), x = Math.floor((e.clientX - rect.left) / cell), y = Math.floor((e.clientY - rect.top) / cell);
+        if (x >= 0 && x < nx && y >= 0 && y < ny) clickSite(idx(x, y, z), e.shiftKey);
+      });
+    }
+  }
+  [...box.querySelectorAll("canvas")].forEach((c) => {
+    const z = +c.dataset.z, dpr = sizeCanvas(c, nx * cell, ny * cell), g = c.getContext("2d");
+    g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, nx * cell, ny * cell);
+    g.strokeStyle = C.grid; g.lineWidth = 1;
+    for (let x = 0; x <= nx; x++) { g.beginPath(); g.moveTo(x * cell + 0.5, 0); g.lineTo(x * cell + 0.5, ny * cell); g.stroke(); }
+    for (let y = 0; y <= ny; y++) { g.beginPath(); g.moveTo(0, y * cell + 0.5); g.lineTo(nx * cell, y * cell + 0.5); g.stroke(); }
+    for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) {
+      const i = idx(x, y, z), cxp = x * cell + cell / 2, cyp = y * cell + cell / 2;
+      if (!occ[i]) { g.fillStyle = C.empty; g.fillRect(cxp - 1, cyp - 1, 2, 2); continue; }
+      const look = siteLook(i, k) || { fill: C.atom };
+      g.globalAlpha = look.dim ? 0.45 : 1; g.fillStyle = look.fill; g.beginPath(); g.arc(cxp, cyp, cell * 0.38, 0, 7); g.fill(); g.globalAlpha = 1;
+      if (look.ring || i === S.sel || i === S.sel2) { g.strokeStyle = i === S.sel || i === S.sel2 ? C.ink : C.bad; g.lineWidth = 1.6; g.beginPath(); g.arc(cxp, cyp, cell * 0.46, 0, 7); g.stroke(); }
+      if (look.letter && cell >= 14) { g.fillStyle = C.surface; g.font = `600 ${Math.round(cell * 0.45)}px ${getComputedStyle(document.body).getPropertyValue("--f-mono")}`; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(look.letter, cxp, cyp + 0.5); }
+    }
+  });
+}
+
+// ------------------------------------------------------------------ panels
+function fmtSite(i) { const c = coords(i); return `(${c.join(",")})`; }
+function fmtPauli(sign, ops, centre) {
+  const keys = Object.keys(ops).map(Number);
+  keys.sort((a, b) => (a === centre ? -1 : b === centre ? 1 : a - b));
+  if (!keys.length) return '<span class="muted">identity</span>';
+  return `${sign < 0 ? "−" : "+"}` + keys.map((q) => `<span class="${ops[q]}">${ops[q]}</span><sub>${coords(q).join(",")}</sub>`).join(" ");
+}
+function renderSite() {
+  const kv = $("site-kv"), st = $("site-stab");
+  $("inj-step").textContent = S.step;
+  if (S.sel == null) { kv.innerHTML = "<dt>atom</dt><dd>none selected</dd>"; st.innerHTML = ""; return; }
+  const i = S.sel, tab = D.run.snaps[S.step], r = tab.row(i), deg = D.deg[i];
+  const measured = D.prog.steps.slice(0, S.step).some((s) => s.op === "measure" || s.op === "clear");
+  const L = r.ops[i] || "I";
+  kv.innerHTML = `<dt>site</dt><dd>${fmtSite(i)} · index ${i}${S.sel2 != null ? ` · second ${fmtSite(S.sel2)}` : ""}</dd>
+    <dt>collided neighbours</dt><dd>${deg} (${deg % 2 ? "odd" : "even"})${D.occ[i] ? "" : " · empty site"}</dd>
+    <dt>own letter</dt><dd>${L}${S.step >= D.nU && collidedAxes() ? ` (rule: ${deg === 0 ? "Y, isolated" : deg % 2 ? "X" : "Y"})` : ""}</dd>
+    <dt>generator</dt><dd>${measured ? "row of this atom after detection steps (a generator, not the image of Z<sub>i</sub>)" : "image of Z<sub>i</sub> through the sequence"}</dd>`;
+  st.innerHTML = fmtPauli(r.sign, r.ops, i);
+  const es = $("err-summary");
+  if (!S.err) { es.innerHTML = ""; return; }
+  const e = errorAt(S.step);
+  if (!e) { es.innerHTML = `${S.err.pauli} error on ${fmtSite(S.err.site)} enters after step ${S.err.step}; move the timeline past it.`; return; }
+  const n = Object.keys(e.pauli).length;
+  es.innerHTML = `${S.err.pauli}${fmtSite(S.err.site)} after step ${S.err.step} → now acts on ${n} atom${n === 1 ? "" : "s"}: <span class="stab">${fmtPauli(1, e.pauli)}</span><br>flips ${e.flips.size} stabilizer${e.flips.size === 1 ? "" : "s"} (ringed in the “injected error” view)${e.outFlips.length ? `; flipped detection outcomes on ${e.outFlips.map(fmtSite).join(" ")}` : ""}.`;
+}
+
+function renderEntropy() {
+  const box = $("ent-chart"), ys = D.entropy, n = ys.length, w = Math.max(260, box.clientWidth || 320), h = 150;
+  const pad = { l: 34, r: 10, t: 10, b: 24 }, ymax = Math.max(2, ...ys);
+  const X = (k) => pad.l + (n > 1 ? (k / (n - 1)) : 0.5) * (w - pad.l - pad.r), Y = (v) => h - pad.b - (v / ymax) * (h - pad.t - pad.b);
+  const ticks = []; const step = ymax <= 6 ? 1 : Math.ceil(ymax / 5);
+  for (let v = 0; v <= ymax; v += step) ticks.push(v);
+  let s = `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" role="img" aria-label="entanglement entropy across the cut against step">`;
+  for (const v of ticks) s += `<line x1="${pad.l}" x2="${w - pad.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)"/><text x="${pad.l - 6}" y="${Y(v) + 3}" text-anchor="end">${v}</text>`;
+  for (let k = 0; k < n; k++) s += `<text x="${X(k)}" y="${h - 8}" text-anchor="middle">${k}</text>`;
+  s += `<text x="${pad.l}" y="${pad.t - 1}" text-anchor="start" dy="0">S (bits)</text>`;
+  s += `<polyline fill="none" stroke="var(--accent)" stroke-width="1.6" points="${ys.map((v, k) => `${X(k)},${Y(v)}`).join(" ")}"/>`;
+  ys.forEach((v, k) => { s += `<circle cx="${X(k)}" cy="${Y(v)}" r="${k === S.step ? 4.5 : 2.8}" fill="${k === S.step ? "var(--ink)" : "var(--accent)"}"/>`; });
+  s += "</svg>";
+  box.innerHTML = s + `<div class="small muted">Entropy of region A (${D.cutA.filter((i) => D.occ[i]).length} atoms with ${S.cut.axis} &lt; ${S.cut.pos}) against step; now ${ys[S.step]} bit${ys[S.step] === 1 ? "" : "s"}.</div>`;
+  const kv = $("pair-kv");
+  if (S.sel == null || S.sel2 == null) { kv.innerHTML = `<dt>two atoms</dt><dd>shift-click a second atom</dd>`; return; }
+  const t = D.run.snaps[S.step], a = t.entropy([S.sel]), b = t.entropy([S.sel2]), ab = t.entropy([S.sel, S.sel2]);
+  kv.innerHTML = `<dt>S(a), S(b)</dt><dd>${a}, ${b} bit</dd><dt>S(a,b)</dt><dd>${ab} bit</dd><dt>I(a:b)</dt><dd>${a + b - ab} bit${a + b - ab === 2 && ab === 0 ? " · Bell pair" : ""}</dd>`;
+}
+
+function renderMeas() {
+  const r = S.cfgResult, sum = $("meas-summary"), tb = $("meas-table");
+  const ex = D.exact;
+  let head = "";
+  if (ex) {
+    const vals = Object.values(ex.means), mean = vals.reduce((a, b) => a + b, 0) / Math.max(1, vals.length);
+    const cls = ex.fidelity > 0.5 ? "good" : ex.fidelity > 0.1 ? "warn" : "bad";
+    head = `Exact under the noise budget: mean ⟨S<sub>i</sub>⟩ = ${mean.toFixed(3)} over ${vals.length} atoms · state fidelity <span class="pill ${cls}">${ex.fidelity.toFixed(3)}</span> · bound from ⟨S<sub>i</sub>⟩: ${ex.bound.toFixed(3)}${ex.bound < 0 ? " (uninformative)" : ""}. `;
+  }
+  if (!r) { sum.innerHTML = head + "Press Sample to simulate detection in the chosen configuration."; tb.innerHTML = ""; return; }
+  sum.innerHTML = head + `<br>${r.config}: ${r.measurable.length} of ${Object.keys(D.exact ? D.exact.means : {}).length} stabilizers recorded from ${r.shots} shots.`;
+  const groups = {};
+  for (const i of Object.keys(r.stabs).map(Number)) {
+    const d = D.deg[i], L = r.stabs[i].ops[i] || "I", key = `${d}|${r.stabs[i].sign < 0 ? "−" : "+"}${L}`;
+    (groups[key] = groups[key] || { d, label: `${r.stabs[i].sign < 0 ? "−" : "+"}${L}`, n: 0, rec: 0, sm: 0, sx: 0 });
+    const g = groups[key]; g.n++;
+    if (ex && ex.means[i] != null) g.sx += ex.means[i];
+    if (r.values[i]) { g.rec++; g.sm += r.values[i][0]; }
+  }
+  const rows = Object.values(groups).sort((a, b) => a.d - b.d || a.label.localeCompare(b.label));
+  tb.innerHTML = `<tr><th>collided neighbours</th><th>generator</th><th>atoms</th><th>recorded</th><th>⟨S⟩ sampled</th><th>⟨S⟩ exact</th></tr>` +
+    rows.map((g) => `<tr><td>${g.d}</td><td class="mono">${g.label}·∏Z</td><td>${g.n}</td><td>${g.rec}</td><td>${g.rec ? (g.sm / g.rec).toFixed(3) : "—"}</td><td>${ex ? (g.sx / g.n).toFixed(3) : "—"}</td></tr>`).join("");
+}
+function runConfig() {
+  const shots = +$("shots").value, cfg = $("cfg").value;
+  const res = E.sampleConfig(D.spec, cfg, S.noise, shots, mulberry32(S.seed + 202));
+  const stabs = E.siteStabilizers(D.spec);
+  S.cfgResult = Object.assign(res, { config: $("cfg").selectedOptions[0].textContent, shots, stabs });
+  S.view = "config"; $("view").value = "config";
+  S.step = D.nU; renderAll(true);
+}
+
+function renderLegend() {
+  const items = {
+    stab: [["X", "X"], ["Y", "Y"], ["Z", "Z"], ["atom", "not in the stabilizer"]],
+    letter: [["X", "X-type"], ["Y", "Y-type"], ["Z", "Z (before the π/2 pulse)"]],
+    error: [["X", "X"], ["Y", "Y"], ["Z", "Z"], ["ring", "stabilizer flipped"]],
+    value: [["good", "⟨S⟩ = 1"], ["warn", "0.5"], ["bad", "≤ 0"]],
+    config: [["good", "recorded, ⟨S⟩ near 1"], ["bad", "recorded, low"], ["atom", "not recorded"]],
+  }[S.view];
+  const colOf = (k) => (k === "atom" ? C.atom : k === "ring" ? "transparent" : C[k] || C.atom);
+  const bonds = AX.split("").map((a) => `<span><span class="sw" style="background:${C.ax[a]};border-radius:2px;height:4px;width:14px;vertical-align:2px"></span>${a} bond</span>`).join("");
+  $("legend").innerHTML = items.map(([k, t]) => `<span><span class="sw" style="background:${colOf(k)};${k === "ring" ? `border:2px solid ${C.bad}` : ""}"></span>${t}</span>`).join("") + bonds +
+    (S.view === "config" ? `<span>letter = detection basis</span>` : "");
+}
+
+function renderSteps() {
+  const ol = $("steps");
+  const all = [`<li class="${S.step === 0 ? "cur" : ""}" data-k="0"><span class="k">0</span><span>prepare |0⟩ on every atom</span><span></span></li>`];
+  D.labels.forEach((lab, j) => {
+    all.push(`<li class="${S.step === j + 1 ? "cur" : ""}" data-k="${j + 1}"><span class="k">${j + 1}</span><span>${lab}</span>
+      <span class="acts"><button data-act="up" data-j="${j}" aria-label="move up">↑</button><button data-act="down" data-j="${j}" aria-label="move down">↓</button><button data-act="del" data-j="${j}" aria-label="remove">✕</button></span></li>`);
+  });
+  ol.innerHTML = all.join("");
+  const warn = [];
+  if (S.steps.some((s) => s.op === "pulse" && s.tg === "all") && !S.steps.some((s) => s.op === "collide")) warn.push("No collision step yet.");
+  $("seq-warn").textContent = warn.join(" ");
+}
+$("steps").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (b) {
+    const j = +b.dataset.j, a = b.dataset.act;
+    if (a === "del") S.steps.splice(j, 1);
+    if (a === "up" && j > 0) [S.steps[j - 1], S.steps[j]] = [S.steps[j], S.steps[j - 1]];
+    if (a === "down" && j < S.steps.length - 1) [S.steps[j + 1], S.steps[j]] = [S.steps[j], S.steps[j + 1]];
+    S.err = null; S.cfgResult = null; derive(); renderAll(); return;
+  }
+  const li = e.target.closest("li"); if (li) { S.step = +li.dataset.k; renderAll(true); }
+});
+
+function renderTimeline() {
+  const n = D.spec.steps.length;
+  $("tl").max = n; $("tl").value = S.step; $("stepnum").textContent = S.step;
+  $("steplabel").innerHTML = S.step === 0 ? "Every atom in |0⟩ = |3,−1⟩; its stabilizer is Z." : `Step ${S.step}: ${D.labels[S.step - 1]}`;
+}
+
+function renderFillSummary() {
+  const n = D.occ.reduce((a, b) => a + b, 0), axes = collidedAxes();
+  const hist = {}; for (let i = 0; i < D.occ.length; i++) if (D.occ[i]) hist[D.deg[i]] = (hist[D.deg[i]] || 0) + 1;
+  $("fill-summary").innerHTML = `${n} atoms in ${S.shape.join(" × ")} sites. Collided neighbours (${axes || "none"}): ` +
+    Object.keys(hist).sort((a, b) => a - b).map((d) => `${hist[d]} with ${d}`).join(", ") + ".";
+  for (const p of ["block", "random", "lines", "plane"]) $("pat-" + p).hidden = S.pattern !== p;
+}
+
+function renderAll(light) {
+  readTokens();
+  if (!light) { renderSteps(); renderFillSummary(); }
+  else renderSteps();
+  renderTimeline(); renderLegend(); draw3d(); drawSlices(); renderSite(); renderEntropy(); renderMeas();
+}
+
+// ------------------------------------------------------------------ presets
+const FILLS = {
+  "4×4×3 sorted": { shape: [6, 6, 5], pattern: "block", block: [4, 4, 3], vac: 0, periph: 0 },
+  "5×5×2 sorted": { shape: [7, 7, 4], pattern: "block", block: [5, 5, 2], vac: 0, periph: 0 },
+  "4×4×3, 3 vacancies": { shape: [6, 6, 5], pattern: "block", block: [4, 4, 3], vac: 3, periph: 0 },
+  "4×4×3 + peripheral": { shape: [6, 6, 5], pattern: "block", block: [4, 4, 3], vac: 0, periph: 0.15 },
+  "parity loaded 54 %": { shape: [7, 7, 5], pattern: "random", frac: 0.54, periph: 0 },
+  "three x lines": { shape: [8, 5, 3], pattern: "lines", laxis: "x", lcount: 3, lgap: 2, periph: 0 },
+  "one plane": { shape: [7, 7, 3], pattern: "plane", pnormal: "z", pindex: 1, periph: 0 },
+  "9 planes, 9×9": { shape: [9, 9, 9], pattern: "full", periph: 0 },
+};
+const PI2X = { op: "pulse", q: 1, ph: 0, tg: "all" };
+const SEQS = {
+  "Du plan: x, y, z": [PI2X, { op: "collide", axes: "x", mode: "echo" }, { op: "collide", axes: "y", mode: "echo" }, { op: "collide", axes: "z", mode: "echo" }],
+  "interleaved x-y-z": [PI2X, { op: "collide", axes: "xyz", mode: "echo" }],
+  "+ Z(π/2) even degree": [PI2X, { op: "collide", axes: "x", mode: "echo" }, { op: "collide", axes: "y", mode: "echo" }, { op: "collide", axes: "z", mode: "echo" }, { op: "rz", q: 1, tg: "even" }],
+  "1D chains (x)": [PI2X, { op: "collide", axes: "x", mode: "echo" }],
+  "2D (x, y)": [PI2X, { op: "collide", axes: "x", mode: "echo" }, { op: "collide", axes: "y", mode: "echo" }],
+  "single-leg π (x)": [PI2X, { op: "collide", axes: "x", mode: "single" }],
+  "clear periphery, then x, y, z": [{ op: "clear", tg: "periph" }, PI2X, { op: "collide", axes: "x", mode: "echo" }, { op: "collide", axes: "y", mode: "echo" }, { op: "collide", axes: "z", mode: "echo" }],
+};
+function presetButtons(box, table, apply) {
+  box.innerHTML = "";
+  for (const name of Object.keys(table)) {
+    const b = document.createElement("button"); b.className = "chip"; b.textContent = name;
+    b.addEventListener("click", () => apply(table[name], name)); box.append(b);
+  }
+}
+presetButtons($("fill-presets"), FILLS, (f) => {
+  Object.assign(S, { vac: 0, periph: 0 }, JSON.parse(JSON.stringify(f))); S.toggles = new Set(); S.sel = S.sel2 = null; S.err = null; S.cfgResult = null;
+  syncInputs(); derive(); defaultSelection(); renderAll();
+});
+presetButtons($("seq-presets"), SEQS, (q) => {
+  S.steps = JSON.parse(JSON.stringify(q)); S.err = null; S.cfgResult = null; derive(); S.step = S.steps.length; renderAll();
+});
+
+function defaultSelection() {
+  for (let i = 0; i < D.occ.length; i++) if (D.occ[i]) { S.sel = i; break; }
+}
+
+// ------------------------------------------------------------------ inputs
+function syncInputs() {
+  [["nx", S.shape[0]], ["ny", S.shape[1]], ["nz", S.shape[2]], ["bx", S.block[0]], ["by", S.block[1]], ["bz", S.block[2]], ["vac", S.vac],
+    ["frac", S.frac], ["lcount", S.lcount], ["lgap", S.lgap], ["pindex", S.pindex], ["periph", S.periph], ["seed", S.seed]].forEach(([k, v]) => { $(k).value = v; });
+  $("pattern").value = S.pattern; $("laxis").value = S.laxis; $("pnormal").value = S.pnormal;
+  $("cut-axis").value = S.cut.axis; $("cut-pos").value = S.cut.pos;
+}
+function clampInt(v, lo, hi) { v = Math.round(+v); return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : lo; }
+function readFill() {
+  S.shape = [clampInt($("nx").value, 1, 9), clampInt($("ny").value, 1, 9), clampInt($("nz").value, 1, 9)];
+  S.block = [clampInt($("bx").value, 1, 9), clampInt($("by").value, 1, 9), clampInt($("bz").value, 1, 9)];
+  S.vac = clampInt($("vac").value, 0, 729); S.frac = Math.max(0, Math.min(1, +$("frac").value || 0));
+  S.pattern = $("pattern").value; S.laxis = $("laxis").value; S.lcount = clampInt($("lcount").value, 1, 81); S.lgap = clampInt($("lgap").value, 1, 8);
+  S.pnormal = $("pnormal").value; S.pindex = clampInt($("pindex").value, 0, 8); S.periph = Math.max(0, Math.min(1, +$("periph").value || 0));
+  S.seed = clampInt($("seed").value, 1, 9999);
+}
+["nx", "ny", "nz", "pattern", "bx", "by", "bz", "vac", "frac", "laxis", "lcount", "lgap", "pnormal", "pindex", "periph", "seed"].forEach((id) =>
+  $(id).addEventListener("change", () => {
+    const shapeBefore = S.shape.join();
+    readFill(); if (S.shape.join() !== shapeBefore) { S.toggles = new Set(); S.sel = S.sel2 = null; }
+    S.err = null; S.cfgResult = null; derive(); if (S.sel == null || !D.occ[S.sel]) defaultSelection(); renderAll();
+  }));
+$("view").addEventListener("change", () => { S.view = $("view").value; renderAll(true); });
+$("tl").addEventListener("input", () => { S.step = +$("tl").value; renderAll(true); });
+$("prev").addEventListener("click", () => { S.step = Math.max(0, S.step - 1); renderAll(true); });
+$("next").addEventListener("click", () => { S.step = Math.min(D.spec.steps.length, S.step + 1); renderAll(true); });
+$("cut-axis").addEventListener("change", () => { S.cut.axis = $("cut-axis").value; computeEntropySeries(); renderAll(true); });
+$("cut-pos").addEventListener("change", () => { S.cut.pos = clampInt($("cut-pos").value, 1, 8); computeEntropySeries(); renderAll(true); });
+document.querySelectorAll("[data-inj]").forEach((b) => b.addEventListener("click", () => {
+  if (S.sel == null) return;
+  S.err = { site: S.sel, step: S.step, pauli: b.dataset.inj }; D.errSeries = null;
+  S.view = "error"; $("view").value = "error";
+  S.step = Math.max(S.step, Math.min(D.nU, D.spec.steps.length)); renderAll(true);
+}));
+$("inj-clear").addEventListener("click", () => { S.err = null; renderAll(true); });
+$("run-cfg").addEventListener("click", runConfig);
+
+// add step
+function syncAddForm() {
+  const op = $("a-op").value;
+  document.querySelectorAll(".addstep [data-for]").forEach((el) => { el.hidden = !el.dataset.for.split(" ").includes(op); });
+  $("a-k-wrap").hidden = !["pulse", "rz", "measure", "clear"].includes(op) || $("a-tg").value !== "plane";
+}
+$("a-op").addEventListener("change", syncAddForm); $("a-tg").addEventListener("change", syncAddForm);
+$("a-add").addEventListener("click", () => {
+  const op = $("a-op").value, tg = $("a-tg").value;
+  let st;
+  if (op === "pulse") st = { op, q: +$("a-q").value, ph: +$("a-ph").value, tg };
+  else if (op === "rz") st = { op, q: +$("a-q").value, tg };
+  else if (op === "collide") { const axes = AX.split("").filter((a) => $("a-" + a).checked).join(""); if (!axes) return; st = { op, axes, mode: $("a-mode").value }; }
+  else if (op === "measure") st = { op, basis: $("a-basis").value, tg };
+  else st = { op, tg };
+  if (tg === "plane") st.k = clampInt($("a-k").value, 0, 8);
+  if (tg === "sel") { st.tg = "list"; st.list = [S.sel, S.sel2].filter((v) => v != null); if (!st.list.length && op !== "collide") return; }
+  if (op === "collide") delete st.tg;
+  S.steps.push(st); S.cfgResult = null; derive(); S.step = S.steps.length; renderAll();
+});
+
+// Bell pair: shortest path through collided bonds; Z off the path, own letter on its interior
+$("bell").addEventListener("click", () => {
+  const note = $("bell-note");
+  if (S.sel == null || S.sel2 == null) { note.textContent = "Select two atoms first (shift-click the second)."; return; }
+  const axes = collidedAxes(), reg = E.regionOf({ shape: S.shape }), adj = Array.from({ length: D.occ.length }, () => []);
+  for (const a of axes) for (const [r, s] of E.bondsOf(reg, D.occ, a)) { adj[r].push(s); adj[s].push(r); }
+  const prev = new Int32Array(D.occ.length).fill(-1), q = [S.sel]; prev[S.sel] = S.sel;
+  while (q.length) { const u = q.shift(); if (u === S.sel2) break; for (const v of adj[u]) if (prev[v] < 0) { prev[v] = u; q.push(v); } }
+  if (prev[S.sel2] < 0) { note.textContent = "The two atoms are not connected by collided bonds."; return; }
+  const path = [S.sel2]; while (path[path.length - 1] !== S.sel) path.push(prev[path[path.length - 1]]);
+  path.reverse();
+  const pre = E.prefixSpec(D.spec, D.nU), stabs = E.siteStabilizers(pre), onPath = new Set(path), bases = {}, sites = [];
+  for (let i = 0; i < D.occ.length; i++) {
+    if (!D.occ[i] || i === S.sel || i === S.sel2) continue;
+    bases[i] = onPath.has(i) ? (stabs[i].ops[i] || "Z") : "Z"; sites.push(i);
+  }
+  S.steps = S.steps.slice(0, D.nU);
+  S.steps.push({ op: "measure", bases, tg: "list", list: sites, basis: "per atom" });
+  derive(); S.step = S.steps.length; renderAll();
+  note.innerHTML = `Added detection of ${sites.length} atoms: Z off the ${path.length}-atom path, each interior path atom in its own stabilizer letter. The two end atoms now share ${D.run.snaps[S.step].entropy([S.sel]) + D.run.snaps[S.step].entropy([S.sel2]) - D.run.snaps[S.step].entropy([S.sel, S.sel2])} bits of mutual information; which Bell state depends on the recorded outcomes.`;
+});
+
+// noise
+function syncNoise() {
+  const sel = $("noise-preset");
+  if (!sel.options.length) for (const k of Object.keys(PRESETS)) { const o = document.createElement("option"); o.value = k; o.textContent = k; sel.append(o); }
+  const custom = !PRESETS[S.preset];
+  if (custom && ![...sel.options].some((o) => o.value === "custom")) { const o = document.createElement("option"); o.value = "custom"; o.textContent = "custom"; sel.append(o); }
+  sel.value = custom ? "custom" : S.preset;
+  $("noise-fields").innerHTML = NOISE_FIELDS.map(([k, lab, st]) => `<label class="ctl">${lab}<input type="number" id="nz-${k}" step="${st}" min="0" max="${k === "echo_contrast" ? 1 : 10}" value="${S.noise[k]}"></label>`).join("");
+  NOISE_FIELDS.forEach(([k]) => $("nz-" + k).addEventListener("change", (e) => {
+    S.noise[k] = Math.max(0, +e.target.value || 0); if (k === "echo_contrast") S.noise[k] = Math.min(1, S.noise[k]);
+    S.preset = "custom"; syncNoise(); S.cfgResult = null; computeExact(); renderAll(true);
+  }));
+  $("noise-src").textContent = custom ? "Custom values." : PRESETS[S.preset].source;
+}
+$("noise-preset").addEventListener("change", (e) => {
+  if (!PRESETS[e.target.value]) return;
+  S.preset = e.target.value; S.noise = Object.assign({}, PRESETS[S.preset].noise); syncNoise(); S.cfgResult = null; computeExact(); renderAll(true);
+});
+
+// ------------------------------------------------------------------ boot
+S.steps = JSON.parse(JSON.stringify(SEQS["Du plan: x, y, z"]));
+syncInputs(); syncAddForm(); syncNoise(); derive(); defaultSelection();
+// a corner of the sorted block as the opening selection
+S.sel = idx(...blockOrigin()); S.sel2 = idx(...blockOrigin().map((v, k) => v + S.block[k] - 1));
+S.step = S.steps.length; S.cut.pos = blockOrigin()[0] + 2; $("cut-pos").value = S.cut.pos; computeEntropySeries();
+renderAll();
+window.addEventListener("resize", () => renderAll(true));
+if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => renderAll(true));
+new MutationObserver(() => renderAll(true)).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+</script>

@@ -10,9 +10,10 @@ requires-python = ">=3.10"
 dependencies = ["numpy>=1.24", "scipy>=1.10", "pyyaml>=6"]
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "matplotlib>=3.7"]   # the drawing tests and scripts/ import matplotlib
+dev = ["pytest>=7", "matplotlib>=3.7", "stim>=1.13"]   # the drawing tests and scripts/ import matplotlib; stim for the cluster tests
 viz = ["matplotlib>=3.7"]
 quantum = ["qutip>=5"]
+cluster = ["stim>=1.13"]
 gpu = ["jax"]
 
 [tool.setuptools.packages.find]
