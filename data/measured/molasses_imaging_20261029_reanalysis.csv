@@ -1,0 +1,10 @@
+# 2026-10-29 hopping-sequence power scan, -25.5 MHz, new molasses calibration (request = fiber uW), 100 ms exposures,
+# 2 s dark hold between the image sets (log). Re-thresholded with reanalyze.py (Camera Control/20261026/molasses_reanalysis):
+# brightness = atom minus empty peak (image 1, no neighbours); hops / losses per atom of image 1, planes 1-7 and planes 2-6.
+run,power_uw,shots,brightness,separation_sigma,atoms_img1,hops,losses,paired_moves,chance_pairs,atoms_mid,hops_mid,losses_mid
+003,2.1,20,14360,5.1,2016,7,118,0,0.2,1367,1,89
+004,2.2,20,16470,5.62,2736,5,152,1,0.0,1892,4,95
+005,2.3,20,16768,5.55,2466,10,138,1,0.6,1728,7,91
+006,2.4,20,17735,6.04,1943,6,102,1,0.4,1398,2,66
+007,2.5,20,17960,5.46,1777,5,91,0,0.2,1290,1,64
+008,3.0,20,21027,6.06,2471,62,193,12,6.8,1817,38,134
