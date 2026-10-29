@@ -33,6 +33,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
+from lattice_sim.molasses import aom  # noqa: E402
 from lattice_sim.molasses import tables as T  # noqa: E402
 from lattice_sim.molasses.model import arrhenius_hop_rate  # noqa: E402
 from lattice_sim.viz.style import DOUBLE_COLUMN_IN, apply  # noqa: E402
@@ -191,7 +192,9 @@ def figure_lab1026(model_rows, out):
     dcol = {-30.5: "#009E73", -25.5: "#0072B2", -20.5: "#D55E00"}
     for d, c in dcol.items():
         m = sorted([r for r in meas if r["detuning_mhz"] == d], key=lambda r: r["rescale"])
-        p = np.array([24.0 / r["rescale"] for r in m])
+        # delivered power from the measured +100 MHz AOM curve (lattice_sim.molasses.aom), relative to r = 24;
+        # used for +95 and +105 MHz too (their curves are not measured)
+        p = np.array([float(aom.relative_power(r["rescale"])) for r in m])
         loss = np.array([r["losses"] / r["atoms_set0"] for r in m])
         err = np.sqrt(loss * (1 - loss) / np.array([r["atoms_set0"] for r in m]))
         ax[0].errorbar(p, loss, err, color=c, marker="o", ms=3, ls="none", capsize=0, label=f"lab {d:+g} MHz")
@@ -212,7 +215,7 @@ def figure_lab1026(model_rows, out):
     ax[1].set_ylabel("Model temperature, −25.5 MHz (µK)")
     ax[2].set_ylabel("Atom brightness margin (counts)")
     for a in ax:
-        a.set_xlabel("Molasses power (rescale 24 = 1)")
+        a.set_xlabel("Molasses power (rescale 24 = 1, measured AOM curve)")
     ax[0].legend(fontsize=5.5)
     ax[1].legend(fontsize=6)
     ax[1].text(0.03, 0.97, f"1 = {LAB_1026_I24:g} mW cm$^{{-2}}$ per beam\n(2.2 µW from the fiber)",
