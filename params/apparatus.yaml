@@ -108,3 +108,33 @@ cooling:
   afp_peak_rabi_kHz: {value: {minus2: 6.77, minus1: 4.91}, status: computed, note: "Blackman amplitude area 0.42 T (pulse.h:945), Rabi ~ sqrt(power); calibration taken as the bare (coupling-1) value (cooling/afp.py CAL_IS_BARE_COUPLING); replaces the 20 kHz of Du App. A used until 2026-10-15"}
   initial_temperature_uK: {value: 5, status: thesis, source: "Wu p.26"}
   measured_3d_ground_fraction: {value: 0.96, status: thesis, source: "Du p.48"}
+
+molasses:
+  detuning_MHz:
+    value: {previous: -50.5, current: -25.5, checked: [-50.5, -35.5, -30.5, -25.5, -20.5]}
+    status: current
+    source: "Maarten, 2026-10-29: locked to the F=4 -> F'=4/5 crossover (-125.5 MHz), single-pass AOM +75 (old), +90, +95, +100 (current), +105 MHz"
+    note: "Li p.25 quotes -45.5 MHz for the +75 MHz setting"
+  power_per_beam_uW: {value: [0.40, 0.50], status: current, source: "Maarten, 2026-10-29 (imaging, full AOM power)"}
+  waist_um: {value: {incoming: 140, retro: 100}, status: thesis, source: "Li p.24-25", note: "retro smaller to balance the cell losses; peak intensity 2P/(pi w^2) = 1.3-1.6 mW/cm^2 per incoming beam"}
+  power_control: {value: "AOM rescale r: all powers scale as r_old/r_new (e.g. 19 -> 21 gives 19/21)", status: current, source: "Maarten, 2026-10-29"}
+  phase_modulation: {value: "Meadowlark LV-100 on two of three pairs: 2pi in 33 ms, pi in 30 ms", status: thesis, source: "Wu App. B; Kumar Sec. 5.3.1"}
+  lattice_depth_during_pgc: {value: full, status: current, source: "Maarten, 2026-10-29"}
+  pgc_scan_hold_ms: {value: 1000, status: current, source: "lab log 2026-05-14 (100 ms for coarse scans); PGC_vapor_loading.dt4 'Picture before_plane E done' -> 'Junk image 3 start'"}
+  pgc_hold_molasses_request: {value: 0.6, status: current, source: "supertime-analysis sequences/2026/PGC_vapor_loading.dt4 (Molasses beams channel, calibrated units)", note: "imaging request 5 (150 ms per plane), so the hold runs at 0.12 of the imaging power; lattice 4.2/4.1/4.2 (full) throughout"}
+  aom_rescale_value:
+    value: {"2023-11-07": 7.0, "2024-05-30": 12.0, "2024-08-01": 12.5, "2025-06-06": 10.0, "2025-07-21": 11.0, "2025-08-20": 11.0, "2026-05-14": 17.0, "2026-07-21": 12.0, "2026-10-27": 24.0}
+    status: current
+    source: "Supertime PC AOMrescale/aomlog.txt (copy to 2026-10-27 03:03), value at the start of each PGC-scan day"
+    note: "the calibration's maximum: power for a given request scales as 1/value if the light itself is unchanged"
+  intensity_per_beam_mW_cm2: {value: 0.7, status: thesis, source: "Li p.58 ('average' intensity at the minimum lattice temperature)", note: "default of model.Config; current peak 1.3-1.6 from power and waist (computed)"}
+  geometry:
+    value: "three beams up through the cell bottom at Brewster's angle (55.4 deg from vertical), p-polarized, retro-reflected through a quarter-wave plate to the orthogonal linear polarization (lin-perp-lin per pair); azimuths 270, 45, 135 deg from lattice x"
+    status: thesis
+    note: "retro-reflection and angles confirmed 'give or take' by Maarten 2026-10-29; one beam is known to be misaligned"
+    source: "Li 2009 (Brewster entry, MOT beam angles 81/117 deg); azimuths assumed (beams.AZIMUTHS_DEG)"
+  pgc_duration_ms: {value: 250, status: thesis, source: "Li p.46"}
+  image_exposure_ms: {value: 50, status: thesis, source: "Li p.54"}
+  hopping_attempt_rate_per_s: {value: 265, status: thesis, source: "Li p.57-58 (Arrhenius fit, T = 10 uK, 15 kHz lattice)"}
+  temperature_after_pgc_uK: {value: {hopping_method: 10, depumping_method: 3.3}, status: thesis, source: "Li p.58, p.71-72"}
+  excited_to_ground_lattice_ratio: {value: -0.32, status: computed, note: "model.EXCITED_TO_GROUND_LATTICE; 6P3/2 / 6S1/2 polarizability at 843.222 nm"}

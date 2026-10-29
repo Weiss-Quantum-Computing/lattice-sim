@@ -1,0 +1,24 @@
+# Hopping-sequence power scans at three molasses AOM frequencies, 2026-10-26 (Camera Control/20261026/NNN-hopevents.txt, CameraGui hop check).
+# Sequence: hopping_2EOx_2imgsets_9 planes (exposure 100 ms, molasses request 5 only during the 9 + 9 exposures, full lattice);
+# each atom sees ~0.9 s of molasses between its set-0 and set-1 images. rescale r: molasses power ~ 24/r of the r = 24 value
+# (2.2 uW out of the fiber at r = 24, +100 MHz). losses = occupied -> empty between sets (mostly unpaired); real_moves = hops paired
+# with a nearest-site loss minus chance; margin = median atom fit height minus threshold (brightness proxy).
+run,aom_mhz,detuning_mhz,rescale,shots,atoms_set0,hops,losses,real_moves,real_moves_err,survival_pct,margin_set0,margin_set1
+13,95,-30.5,16,20,2712,314,648,112.4,14.9,76.1,15922,16060
+14,95,-30.5,18,20,3975,215,464,53.2,11.2,88.3,12896,12780
+15,95,-30.5,20,20,3783,134,270,39.6,8.7,92.9,9747,9924
+16,95,-30.5,22,20,4187,81,217,27.0,6.4,94.8,7308,7316
+18,95,-30.5,26,20,3083,29,82,1.2,1.8,97.3,7678,7743
+19,95,-30.5,28,20,3028,189,405,13.4,7.1,86.6,3476,3466
+5,100,-25.5,14,20,2971,415,789,98.8,16.0,73.4,19612,19928
+4,100,-25.5,16,20,3373,239,479,72.6,12.1,85.8,15777,15924
+0,100,-25.5,18,20,2848,101,223,36.8,7.7,92.2,10744,10523
+1,100,-25.5,20,20,2922,70,155,13.4,4.6,94.7,8480,8584
+2,100,-25.5,22,20,2650,50,116,12.6,4.1,95.6,7274,7097
+3,100,-25.5,24,20,2837,33,100,10.6,3.5,96.5,8830,9024
+20,100,-25.5,24,100,19643,277,620,45.2,8.4,96.8,9753,9859
+6,105,-20.5,20,20,3400,224,574,48.4,10.6,83.1,16645,17095
+7,105,-20.5,22,20,4288,179,453,50.0,10.4,89.4,13564,13601
+8,105,-20.5,24,20,3626,117,294,35.8,8.1,91.9,9968,10085
+9,105,-20.5,26,20,4309,76,240,24.8,6.3,94.4,8211,8647
+12,105,-20.5,32,20,3674,326,430,16.2,8.9,88.3,4012,3985
