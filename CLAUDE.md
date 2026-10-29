@@ -40,6 +40,7 @@ Slow scripts (minutes): `build_model_tables.py`, `build_profile_tables.py`,
 - `src/lattice_sim/viz/style.py` — the figure style; use `apply()` in new figure scripts.
 - `scripts/` — analyses and figures; `figures/` — committed outputs; `ramps/` — ramps in Transport-Optimizer CSV format for the experiment.
 - `params/apparatus.yaml` — apparatus parameters, each with `source` and `status` (current / thesis / computed / open). It is the reference, but no code loads it: the values are literals in the modules (spacing 4.8374 µm in `fields/lattice_pair.py`, `gates/collision.py`, `gates/chain.py`, `spin/pair_physics.py`, `spectra/sidebands.py`, `spectra/grid.py`, `spectra/beams.py` and some scripts; waist 60 µm; full-depth trap frequencies 19 / 16 / 12.5 kHz in `sidebands.nominal_site`). Change a value in the yaml and in the code together; `tests/test_apparatus_constants.py` checks the main ones agree.
+- Related repository: `Weiss-Quantum-Computing/supertime-analysis` (Supertime sequence files `sequences/2024-2026/*.dt4`, a standard-library reader `supertime_editor.model.Sequence`, run-log and VI notes). Use it for sequence timing and channel values (e.g. the PGC hold: `PGC_vapor_loading.dt4`, molasses 0.6 vs 5 for imaging, 1000 ms, full lattice).
 - `data/reference/` — Transport-Optimizer calibration CSVs; `data/measured/` — lab measurements (e.g. ramp-polarimeter exports).
 
 ## Conventions
