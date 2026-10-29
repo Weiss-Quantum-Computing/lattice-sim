@@ -295,7 +295,8 @@ def summary(res):
              n_tail=na.tolist(), scatter_rate=res.scatter_rate, depump_frac=res.depump_frac,
              hops_obs_per_s=res.hops_per_s.tolist(), tau_e_ms=res.tau_e_ms.tolist(),
              light_shift_uk=res.light_shift_uk, barrier_uk=res.barrier_uk().tolist(),
-             per_atom_t_sd_uk=res.per_atom_t_uk.std(axis=0).tolist())
+             per_atom_t_sd_uk=res.per_atom_t_uk.std(axis=0).tolist(),
+             saturation=float(total_saturation(res.cfg.intensity, res.cfg.detuning)))
     return d
 
 

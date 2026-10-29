@@ -1,6 +1,7 @@
 """Molasses Monte Carlo scans (lattice_sim.molasses).
 
     python scripts/molasses_scan.py intensity   # T, scattering, tau_E vs intensity, several detunings, full depth
+    python scripts/molasses_scan.py lab1026     # the lab's 2026-10-26 power scan at -25.5 MHz (rescale 14-24)
     python scripts/molasses_scan.py depth       # T and hopping at 0.1, 0.25, 0.5 of full depth
     python scripts/molasses_scan.py field       # T vs residual field along x, y, z
     python scripts/molasses_scan.py li          # Li (2009) conditions: 15 kHz, -45.5 MHz
@@ -32,6 +33,8 @@ INTENSITIES = (0.05, 0.1, 0.2, 0.35, 0.5, 0.7, 1.0, 1.4, 2.0, 3.0)
 FIELD_MG = (0.0, 50.0, 100.0, 200.0, 400.0, 800.0)
 FIELD_INTENSITIES = (0.2, 0.7, 1.4)    # 1.4 ~ the present 0.4-0.5 uW per beam in a 140 um waist
 FIELD_DETUNINGS = (-51.0, -25.5)
+LAB_1026_I24 = 1.46                     # mW/cm^2 per beam at rescale 24, request 5 (2.2 uW out of the fiber)
+LAB_1026_RESCALE = (14, 16, 18, 20, 22, 24)
 DEPTH_DETUNINGS = (-51.0, -25.5)
 DEPTH_INTENSITIES = (0.35, 0.7, 1.4)
 DEPTH_SCALES = (0.1, 0.25, 0.5)
@@ -108,6 +111,15 @@ def main(argv):
                 if M.total_saturation(i, d) <= M.MAX_SATURATION]
         cfgs.sort(key=lambda c: c.intensity / abs(c.detuning))
         run_points("depth", cfgs)
+    elif what == "lab1026":
+        # The lab's 2026-10-26 hopping-sequence power scan at +100 MHz (-25.5 MHz): rescale r = 14 ... 24 with
+        # request 5; at r = 24 the request gave 2.2 uW out of the fiber, ~0.45 uW per beam, 1.46 mW/cm^2 per
+        # beam (140 um waist). Power taken as ~ 1/r. Total saturation up to 0.14: beyond MAX_SATURATION,
+        # reported as an extrapolation of the model (summary carries the saturation).
+        cfgs = [M.Config(intensity=LAB_1026_I24 * 24.0 / r, detuning=-25.5, n_atoms=128,
+                         t_total_ms=burn(1.0) + 1.7, t_burn_ms=burn(1.0), seed=23) for r in LAB_1026_RESCALE]
+        cfgs.sort(key=lambda c: c.intensity)
+        run_points("lab1026", cfgs)
     elif what == "li":
         cfgs = [M.Config(intensity=i, detuning=-45.5, trap_khz=(15.0, 15.0, 15.0), n_atoms=N_ATOMS,
                          t_total_ms=2.5, t_burn_ms=0.8, seed=17) for i in (0.1, 0.2, 0.35, 0.7, 1.4, 2.8)]

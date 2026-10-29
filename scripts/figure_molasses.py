@@ -131,10 +131,111 @@ def figure_field(tab, out):
     plt.close(fig)
 
 
+def _hops(r, attempt=None):
+    """Arrhenius hopping rate (sum over axes, s^-1) of one summary row, tail temperature."""
+    t = np.asarray(r["t_uk"], float)
+    tt = np.asarray(r.get("t_tail_uk", t), float)
+    tt = np.where(np.isfinite(tt), np.maximum(tt, t), t)
+    tau = np.asarray(r["tau_e_ms"], float) if attempt is None else 1e3 / attempt
+    return float(arrhenius_hop_rate(tt, tau, np.asarray(r["barrier_uk"], float)).sum())
+
+
+def figure_depth(rows, out):
+    """a: temperature against lattice depth; b: hopping rate, counted in the Monte Carlo (markers) and
+    Arrhenius from the tail temperature with attempt rate 1/tau_E (solid) or Li's 265 s^-1 (dashed)."""
+    fig, ax = plt.subplots(1, 2, figsize=(DOUBLE_COLUMN_IN, 2.6), constrained_layout=True)
+    keys = sorted({(r["detuning"], r["intensity"]) for r in rows})
+    cols = ["#0072B2", "#56B4E9", "#009E73", "#D55E00", "#E69F00", "#CC79A7"]
+    for n, (d, i) in enumerate(keys):
+        rr = sorted([r for r in rows if (r["detuning"], r["intensity"]) == (d, i)], key=lambda r: r["depth_scale"])
+        f = np.array([r["depth_scale"] for r in rr])
+        lab = f"{d:+g} MHz, {i:g} mW cm$^{{-2}}$"
+        ax[0].plot(f, [np.mean(r["t_uk"]) for r in rr], color=cols[n % 6], marker="o", ms=3, label=lab)
+        obs = np.array([sum(r["hops_obs_per_s"]) for r in rr])
+        ax[1].plot(f[obs > 0], obs[obs > 0], color=cols[n % 6], marker="o", ms=3.5, ls="none")
+        ax[1].plot(f, [max(_hops(r), 1e-6) for r in rr], color=cols[n % 6], lw=0.9)
+        ax[1].plot(f, [max(_hops(r, T.LI_ATTEMPT_RATE_PER_S), 1e-6) for r in rr], color=cols[n % 6], lw=0.8,
+                   ls="--")
+    for a in ax:
+        a.set_xlabel("Lattice depth (fraction of full)")
+        a.set_xscale("log")
+    ax[0].set_ylabel("Temperature (µK)")
+    ax[1].set_yscale("log")
+    ax[1].set_ylim(1e-3, 1e5)
+    ax[1].set_ylabel("Hopping rate, x+y+z (s$^{-1}$)")
+    ax[0].legend(fontsize=5.5)
+    ax[1].text(0.97, 0.95, "markers: counted in the Monte Carlo\nsolid: Arrhenius, Γ$_a$ = 1/τ$_E$\n"
+               "dashed: Arrhenius, Γ$_a$ = 265 s$^{-1}$", transform=ax[1].transAxes, ha="right", va="top",
+               fontsize=5.5, color="#555555")
+    for a, s in zip(ax, "ab"):
+        letter(a, s, -0.16)
+    fig.savefig(out)
+    plt.close(fig)
+
+
+def figure_lab1026(model_rows, out):
+    """The 2026-10-26 hopping-sequence power scans against the model at -25.5 MHz.
+    a: loss per image cycle (~0.9 s of molasses); b: model temperature; c: brightness against model R."""
+    import csv
+    meas = []
+    with open(REPO / "data" / "measured" / "molasses_hopping_20261026.csv", encoding="utf-8", newline="") as fh:
+        for row in csv.DictReader(l for l in fh if not l.startswith("#")):
+            meas.append({k: float(v) for k, v in row.items()})
+    exposure_s = LAB_1026_MOLASSES_S
+    fig, ax = plt.subplots(1, 3, figsize=(DOUBLE_COLUMN_IN, 2.5), constrained_layout=True)
+    dcol = {-30.5: "#009E73", -25.5: "#0072B2", -20.5: "#D55E00"}
+    for d, c in dcol.items():
+        m = sorted([r for r in meas if r["detuning_mhz"] == d], key=lambda r: r["rescale"])
+        p = np.array([24.0 / r["rescale"] for r in m])
+        loss = np.array([r["losses"] / r["atoms_set0"] for r in m])
+        err = np.sqrt(loss * (1 - loss) / np.array([r["atoms_set0"] for r in m]))
+        ax[0].errorbar(p, loss, err, color=c, marker="o", ms=3, ls="none", capsize=0, label=f"lab {d:+g} MHz")
+        ax[2].plot(p, [r["margin_set0"] for r in m], color=c, marker="o", ms=3, ls="none")
+    mr = sorted(model_rows, key=lambda r: r["intensity"])
+    if mr:
+        p = np.array([r["intensity"] / LAB_1026_I24 for r in mr])
+        for att, ls, lab in ((None, "-", "model, Γ$_a$ = 1/τ$_E$"), (T.LI_ATTEMPT_RATE_PER_S, "--", "model, Γ$_a$ = 265 s$^{-1}$")):
+            h = np.array([_hops(r, att) for r in mr])
+            ax[0].plot(p, 1 - np.exp(-h * exposure_s), color="#0072B2", ls=ls, lw=1, label=lab)
+        ax[1].plot(p, [np.mean(r["t_uk"]) for r in mr], color="#0072B2", marker="s", ms=3, label="kinetic")
+        ax[1].plot(p, [np.mean(np.maximum(r["t_tail_uk"], r["t_uk"])) for r in mr], color="#0072B2", ls=":",
+                   marker="^", ms=3, label="tail")
+        ax2p = p
+    ax[0].set_yscale("log")
+    ax[0].set_ylim(5e-3, 1.2)
+    ax[0].set_ylabel(f"Loss per image cycle ({exposure_s:g} s molasses)")
+    ax[1].set_ylabel("Model temperature, −25.5 MHz (µK)")
+    ax[2].set_ylabel("Atom brightness margin (counts)")
+    for a in ax:
+        a.set_xlabel("Molasses power (rescale 24 = 1)")
+    ax[0].legend(fontsize=5.5)
+    ax[1].legend(fontsize=6)
+    ax[1].text(0.03, 0.97, f"1 = {LAB_1026_I24:g} mW cm$^{{-2}}$ per beam\n(2.2 µW from the fiber)",
+               transform=ax[1].transAxes, va="top", fontsize=5.5, color="#555555")
+    for a, s in zip(ax, "abc"):
+        letter(a, s)
+    fig.savefig(out)
+    plt.close(fig)
+
+
+LAB_1026_I24 = 1.46          # as scripts/molasses_scan.py
+LAB_1026_MOLASSES_S = 0.9    # 9 exposures x 100 ms between the two image sets
+
+
 def main():
     apply()
     tab = T.Tables.from_dir()
     (REPO / "figures").mkdir(exist_ok=True)
+    depth = T.load_jsonl(T.DATA_DIR / "depth.jsonl")
+    keys = {(r["detuning"], r["intensity"]) for r in depth}
+    depth += [r for r in T.load_jsonl(T.DATA_DIR / "intensity.jsonl")          # full depth, same settings
+              if (r["detuning"], r["intensity"]) in keys and r["depth_scale"] == 1.0 and not any(r["b_mg"])]
+    if depth:
+        figure_depth(depth, REPO / "figures" / "molasses_depth.png")
+        print("wrote figures/molasses_depth.png")
+    lab = T.load_jsonl(T.DATA_DIR / "lab1026.jsonl")
+    figure_lab1026(lab, REPO / "figures" / "molasses_lab_20261026.png")
+    print("wrote figures/molasses_lab_20261026.png")
     if np.isfinite(tab.scatter).any():
         figure_intensity(tab, REPO / "figures" / "molasses_intensity.png")
         print("wrote figures/molasses_intensity.png")
