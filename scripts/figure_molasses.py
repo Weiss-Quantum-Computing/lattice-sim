@@ -26,6 +26,7 @@ from pathlib import Path
 
 import numpy as np
 import matplotlib
+import matplotlib.ticker
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
@@ -102,10 +103,9 @@ def figure_field(tab, out):
                     continue
                 a.plot(c[0], c[1].mean(axis=1), color=icol[n % 3], ls=AXIS_STYLES[ka], marker="o", ms=2,
                        label=f"{i:g} mW cm$^{{-2}}$" if ka == 0 else (f"B ∥ {'xyz'[ka]}" if n == 0 else None))
-        a.set_yscale("log")
         a.set_xlabel("Residual field (mG)")
         a.set_ylabel("Temperature (µK)")
-        a.set_title(f"{d:+.0f} MHz", fontsize=7)
+        a.set_title(f"{d:+g} MHz", fontsize=7)
     if len(show):
         h, lab = ax[0].get_legend_handles_labels()
         ax[0].legend(h, [l.replace("B ∥ y", "B ∥ y (dashed)").replace("B ∥ z", "B ∥ z (dotted)") for l in lab],
@@ -118,10 +118,15 @@ def figure_field(tab, out):
             continue
         b2 = np.array([np.mean([tab.doubling_field(d, i, a) for a in range(3)]) for i in ii])
         fin = np.isfinite(b2)
-        ax[2].plot(np.array(ii)[fin], b2[fin], color=cols[k], marker="o", ms=3, label=f"{d:+.0f} MHz")
+        ax[2].plot(np.array(ii)[fin], b2[fin], color=cols[k], marker="o", ms=3, label=f"{d:+g} MHz")
         ax[2].plot(np.array(ii)[~fin], np.full((~fin).sum(), bmax), color=cols[k], marker="^", ms=3, mfc="none",
                    ls="none")
     ax[2].set_xscale("log")
+    ax[2].set_xticks([0.2, 0.5, 1.0, 2.0])
+    ax[2].set_xticklabels(["0.2", "0.5", "1", "2"])
+    ax[2].xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+    ax[2].text(0.97, 0.03, "open: T does not double\nwithin the scanned 800 mG", transform=ax[2].transAxes,
+               ha="right", va="bottom", fontsize=5.5, color="#555555")
     ax[2].set_xlabel("Intensity per beam (mW cm$^{-2}$)")
     ax[2].set_ylabel("Field doubling T (mG)")
     ax[2].legend(fontsize=6)
