@@ -6,8 +6,9 @@ figures/molasses_intensity.png (zero field)
      curve per detuning;
   b  photon scattering rate against intensity;
   c  hopping rate (sum over axes, Arrhenius with attempt rate 1/tau_E);
-  d  scattering rate against temperature (parametric in intensity): the
-     photon yield available at a given temperature.
+  d  scattering rate against temperature, parametric in intensity from the
+     temperature minimum upward (below it the same T comes with fewer photons):
+     the photon yield available at a given temperature.
 
 figures/molasses_field.png
   a, b  temperature against a residual field along x, y, z at -51 MHz and
@@ -56,10 +57,12 @@ def figure_intensity(tab, out):
         tm = tab.t[k][ok].mean(axis=1)
         te = np.sqrt((tab.t_err[k][ok] ** 2).sum(axis=1)) / 3
         kw = dict(color=cols[k], marker="o", ms=2.5, lw=0.9)
-        ax[0, 0].errorbar(ii, tm, te, label=f"{d:+.0f} MHz", capsize=0, **kw)
+        ax[0, 0].errorbar(ii, tm, te, label=f"{d:+g} MHz", capsize=0, **kw)
         ax[0, 1].plot(ii, tab.scatter[k][ok] * 1e-3, **kw)
         ax[1, 0].plot(ii, np.maximum(hop[k][ok], 1e-9), **kw)
-        ax[1, 1].plot(tm, tab.scatter[k][ok] * 1e-3, **kw)
+        j = int(np.argmin(tm))                 # operating branch: intensities at and above the T minimum
+        if len(tm) > j + 1:
+            ax[1, 1].plot(tm[j:], tab.scatter[k][ok][j:] * 1e-3, **kw)
     for a in (ax[0, 0], ax[0, 1], ax[1, 0]):
         a.set_xscale("log")
         a.set_xlabel("Intensity per beam (mW cm$^{-2}$)")
@@ -72,6 +75,8 @@ def figure_intensity(tab, out):
     ax[1, 0].set_ylim(bottom=1e-6)
     ax[1, 1].set_xlabel("Temperature (µK)")
     ax[1, 1].set_ylabel("Scattering rate (10$^3$ s$^{-1}$)")
+    ax[1, 1].text(0.97, 0.05, "intensity ≥ optimum", transform=ax[1, 1].transAxes, ha="right", fontsize=6,
+                  color="#555555")
     ax[0, 0].legend(title="Detuning", fontsize=6, title_fontsize=6, ncol=2)
     ax[1, 0].text(0.03, 0.95, "full depth (19, 16, 12.5 kHz)\nbarriers 268, 192, 115 µK", transform=ax[1, 0].transAxes,
                   va="top", fontsize=6, color="#555555")

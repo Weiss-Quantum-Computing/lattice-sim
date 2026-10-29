@@ -43,7 +43,7 @@ AXIS_COLOURS = ("#0072B2", "#D55E00", "#009E73")          # Okabe-Ito
 CURRENT_COLOUR = "#000000"
 LIVE_FIELDS_MG = (0.0, 50.0, 100.0, 200.0, 400.0)
 ATTEMPT_CHOICES = {"1/τ_E (model)": None, f"{T.LI_ATTEMPT_RATE_PER_S:g} s⁻¹ (Li 2009 fit)": T.LI_ATTEMPT_RATE_PER_S}
-DEFAULTS = dict(detuning=-51.0, intensity=0.7, pulse_ms=250.0, attempt="1/τ_E (model)", bx=0.0, by=0.0, bz=0.0, depth_scale=1.0,
+DEFAULTS = dict(detuning=-51.0, intensity=0.7, pulse_ms=1000.0, attempt="1/τ_E (model)", bx=0.0, by=0.0, bz=0.0, depth_scale=1.0,
                 live_ms=2.0, trap_khz=M.TRAP_FULL_KHZ)
 
 

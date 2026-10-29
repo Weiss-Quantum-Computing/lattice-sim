@@ -1,6 +1,7 @@
 """Molasses Monte Carlo scans (lattice_sim.molasses).
 
     python scripts/molasses_scan.py intensity   # T, scattering, tau_E vs intensity, several detunings, full depth
+    python scripts/molasses_scan.py depth       # T and hopping at 0.1, 0.25, 0.5 of full depth
     python scripts/molasses_scan.py field       # T vs residual field along x, y, z
     python scripts/molasses_scan.py li          # Li (2009) conditions: 15 kHz, -45.5 MHz
     python scripts/molasses_scan.py salomon     # free space, orthogonal lin-perp-lin (Salomon 1990)
@@ -23,11 +24,17 @@ from lattice_sim.molasses import levels as L  # noqa: E402
 from lattice_sim.molasses import model as M  # noqa: E402
 
 OUT = REPO / "data" / "molasses"
-DETUNINGS = (-51.0, -40.0, -30.0, -20.0, -15.0, -10.0)
+# Lab: locked to the F=4 -> F'=4/5 crossover (-125.5 MHz from F'=5), single-pass AOM +75 (old), +90, +95,
+# +100 (current), +105 MHz -> -50.5, -35.5, -30.5, -25.5, -20.5 MHz (LAB_DETUNINGS).
+LAB_DETUNINGS = (-50.5, -35.5, -30.5, -25.5, -20.5)
+DETUNINGS = (-51.0, -40.0, -35.5, -30.0, -25.5, -20.0, -15.0, -10.0)
 INTENSITIES = (0.05, 0.1, 0.2, 0.35, 0.5, 0.7, 1.0, 1.4, 2.0, 3.0)
 FIELD_MG = (0.0, 50.0, 100.0, 200.0, 400.0, 800.0)
 FIELD_INTENSITIES = (0.2, 0.7, 2.0)
-FIELD_DETUNINGS = (-51.0, -30.0, -20.0, -10.0)
+FIELD_DETUNINGS = (-51.0, -25.5)
+DEPTH_DETUNINGS = (-51.0, -25.5)
+DEPTH_INTENSITIES = (0.35, 0.7, 1.4)
+DEPTH_SCALES = (0.1, 0.25, 0.5)
 N_ATOMS = 192
 
 
@@ -94,6 +101,13 @@ def main(argv):
                                          t_total_ms=burn(i) + 1.2, t_burn_ms=burn(i), seed=13))
         cfgs.sort(key=lambda c: c.intensity / abs(c.detuning))
         run_points("field", cfgs)
+    elif what == "depth":
+        cfgs = [M.Config(intensity=i, detuning=d, depth_scale=f, n_atoms=N_ATOMS, t_total_ms=burn(i) + 1.7,
+                         t_burn_ms=burn(i), seed=19)
+                for d in DEPTH_DETUNINGS for i in DEPTH_INTENSITIES for f in DEPTH_SCALES
+                if M.total_saturation(i, d) <= M.MAX_SATURATION]
+        cfgs.sort(key=lambda c: c.intensity / abs(c.detuning))
+        run_points("depth", cfgs)
     elif what == "li":
         cfgs = [M.Config(intensity=i, detuning=-45.5, trap_khz=(15.0, 15.0, 15.0), n_atoms=N_ATOMS,
                          t_total_ms=2.5, t_burn_ms=0.8, seed=17) for i in (0.1, 0.2, 0.35, 0.7, 1.4, 2.8)]
