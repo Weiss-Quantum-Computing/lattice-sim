@@ -187,3 +187,18 @@ def test_aom_calibration_reproduces_the_measured_imaging_power():
     rows = aom.supertime_file_lines(c["new"], offset_uw=0.086)
     vals = np.array([[float(x) for x in r.split("\t")] for r in rows])
     assert vals[0].tolist() == [0.0, 0.0] and np.all(np.diff(vals[:, 1]) >= 0)
+
+
+def test_old_requests_in_the_new_calibration_file():
+    """Old request at rescale 24 -> the voltage Supertime sent -> what to request with OM-2026-10-29.txt
+    (rescale = its top, 20.91 uW at 4.4 V): 5 -> 2.05, 2 -> 0.66, 0.6 -> 0.13 uW."""
+    from pathlib import Path
+    from lattice_sim.molasses import aom
+    c = aom.load_curves()
+    f = Path(__file__).resolve().parents[1] / "data" / "measured" / "OM-2026-10-29.txt"
+    rows = np.array([[float(x) for x in line.split()] for line in f.read_text(encoding="utf-8").splitlines()
+                     if line.strip()])
+    assert rows[-1].tolist() == pytest.approx([4.4, 20.914])
+    for old, new in ((5.0, 2.055), (2.0, 0.656), (0.6, 0.134)):
+        v = float(aom.request_to_volts(old, 24.0, c["supertime"]))
+        assert np.interp(v, rows[:, 0], rows[:, 1]) == pytest.approx(new, abs=2e-3)

@@ -3,7 +3,7 @@
 Writes figures/molasses_aom_calibration.png and a Supertime calibration file
 from the 2026-10-29 measurement, data/measured/OM-2026-10-29.txt (volts, uW,
 tab separated, CRLF, as OM-2014-9-3.txt), with the dark reading at 0-1.1 V
-(DARK_UW) subtracted. Use --offset 0 to keep the readings as measured.
+(DARK_UW) subtracted and the top at VMAX = 4.4 V (20.91 uW), below RF saturation. Use --offset 0 to keep the readings as measured.
 
 a  power against control voltage: the file as Supertime uses it (rescale 24),
    the earlier measurement and the 2026-10-29 one, with the voltages for the
@@ -36,8 +36,13 @@ LABEL = {"supertime": "Supertime file (rescale 24)", "old": "measured earlier",
          "new": "measured 2026-10-29 (background subtracted)"}
 
 
-def write_supertime_file(curves, offset, path):
-    lines = aom.supertime_file_lines(curves["new"], offset_uw=offset)
+VMAX = 4.4               # top of the file: the lab keeps the AOM RF below saturation (Maarten, 2026-10-29: 4.4 V, 20.91 uW)
+
+
+def write_supertime_file(curves, offset, path, vmax=VMAX):
+    v, pw = curves["new"]
+    keep = v <= vmax + 1e-9
+    lines = aom.supertime_file_lines((v[keep], pw[keep]), offset_uw=offset)
     with open(path, "w", encoding="utf-8", newline="") as fh:
         fh.write("\r\n".join(lines) + "\r\n")
 
