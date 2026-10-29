@@ -90,7 +90,7 @@ def main(argv):
                         continue
                     bv = [0.0, 0.0, 0.0]
                     bv[ax] = b
-                    cfgs.append(M.Config(intensity=i, detuning=d, b_mg=tuple(bv), n_atoms=96,
+                    cfgs.append(M.Config(intensity=i, detuning=d, b_mg=tuple(bv), n_atoms=64,
                                          t_total_ms=burn(i) + 1.2, t_burn_ms=burn(i), seed=13))
         cfgs.sort(key=lambda c: c.intensity / abs(c.detuning))
         run_points("field", cfgs)
