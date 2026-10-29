@@ -5,7 +5,8 @@ figures/molasses_intensity.png (zero field)
   a  kinetic temperature (mean of x, y, z) against intensity per beam, one
      curve per detuning;
   b  photon scattering rate against intensity;
-  c  hopping rate (sum over axes, Arrhenius with attempt rate 1/tau_E);
+  c  hopping rate (sum over axes, Arrhenius with attempt rate 1/tau_E and the
+     tail temperature of the ensemble, tables.Tables.hop_rate);
   d  scattering rate against temperature, parametric in intensity from the
      temperature minimum upward (below it the same T comes with fewer photons):
      the photon yield available at a given temperature.

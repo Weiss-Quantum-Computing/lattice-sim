@@ -43,12 +43,33 @@ AXIS_COLOURS = ("#0072B2", "#D55E00", "#009E73")          # Okabe-Ito
 CURRENT_COLOUR = "#000000"
 LIVE_FIELDS_MG = (0.0, 50.0, 100.0, 200.0, 400.0)
 ATTEMPT_CHOICES = {"1/τ_E (model)": None, f"{T.LI_ATTEMPT_RATE_PER_S:g} s⁻¹ (Li 2009 fit)": T.LI_ATTEMPT_RATE_PER_S}
-DEFAULTS = dict(detuning=-51.0, intensity=0.7, pulse_ms=1000.0, attempt="1/τ_E (model)", bx=0.0, by=0.0, bz=0.0, depth_scale=1.0,
+TEMPERATURE_CHOICES = {"tail of the ensemble (default)": True, "mean kinetic": False}
+DEFAULTS = dict(detuning=-25.5, intensity=0.7, pulse_ms=1000.0, attempt="1/τ_E (model)",
+                hop_t="tail of the ensemble (default)", power_uw=0.45, waist_um=140.0, bx=0.0, by=0.0, bz=0.0, depth_scale=1.0,
                 live_ms=2.0, trap_khz=M.TRAP_FULL_KHZ)
 
 
 def attempt_of(s):
     return ATTEMPT_CHOICES.get(s.get("attempt"), None)
+
+
+def tail_of(s):
+    return TEMPERATURE_CHOICES.get(s.get("hop_t"), True)
+
+
+def intensity_from_power(power_uw, waist_um):
+    """Peak intensity (mW/cm^2) of a Gaussian beam, 2P / (pi w^2)."""
+    return 2 * power_uw * 1e-3 / (np.pi * (waist_um * 1e-4) ** 2)
+
+
+def live_hop(r, s):
+    att = attempt_of(s)
+    t = r.t_uk
+    if tail_of(s):
+        tt, _ = M.tail_temperature_uk(r.e_samples, r.t_uk)
+        t = np.where(np.isfinite(tt), np.maximum(tt, t), t)
+    tau = r.tau_e_ms if att is None else 1e3 / att
+    return M.arrhenius_hop_rate(t, tau, r.barrier_uk())
 
 
 def detuning_colours(n):
@@ -67,8 +88,7 @@ def live_config(s, b_mg=None, n_atoms=64):
 
 def live_point(s, n_atoms):
     r = M.run(live_config(s, n_atoms=n_atoms))
-    att = attempt_of(s)
-    hop = r.hop_rate() if att is None else M.arrhenius_hop_rate(r.t_uk, 1e3 / att, r.barrier_uk())
+    hop = live_hop(r, s)
     return dict(settings=dict(s), t=r.t_uk, t_err=r.t_uk_err, scatter=r.scatter_rate, depump=r.depump_frac,
                 tau=r.tau_e_ms, light_shift=r.light_shift_uk, hop=hop, hops_obs=r.hops_per_s,
                 barrier=r.barrier_uk(), e=r.e_samples)
@@ -83,9 +103,7 @@ def live_field_scan(s, report, cancelled, n_atoms=64):
         bv = [0.0, 0.0, 0.0]
         bv[ax] = b
         r = M.run(live_config(s, b_mg=bv, n_atoms=n_atoms))
-        att = attempt_of(s)
-        hop = r.hop_rate() if att is None else M.arrhenius_hop_rate(r.t_uk, 1e3 / att, r.barrier_uk())
-        out.append((ax, b, r.t_uk, hop))
+        out.append((ax, b, r.t_uk, live_hop(r, s)))
         report(k + 1, len(jobs))
     return dict(settings=dict(s), points=out)
 
@@ -111,7 +129,7 @@ def draw_intensity(fig, tab, s, live, labplot):
     ax = fig.subplots(2, 2)
     cols = detuning_colours(len(tab.detunings))
     att = attempt_of(s)
-    hop_nodes = tab.node_hop_rates(att).sum(axis=-1)
+    hop_nodes = tab.node_hop_rates(att, tail_of(s)).sum(axis=-1)
     ii = np.geomspace(tab.intensities[0], tab.intensities[-1], 60)
     for k, d in enumerate(tab.detunings):
         lab = f"{d:+.0f} MHz"
@@ -122,17 +140,19 @@ def draw_intensity(fig, tab, s, live, labplot):
         ax[0, 0].errorbar(xi, tm, te, color=cols[k], marker="o", ms=3, lw=1, label=lab)
         ax[0, 1].plot(xi, tab.scatter[k][ok] * 1e-3, color=cols[k], marker="o", ms=3, lw=1)
         ax[1, 0].plot(xi, np.maximum(hop_nodes[k][ok], 1e-12), color=cols[k], marker="o", ms=3, lw=1)
-        ax[1, 1].plot(tm, tab.scatter[k][ok] * 1e-3, color=cols[k], marker="o", ms=3, lw=1)
+        j = int(np.argmin(tm))                # operating branch, as figure_molasses
+        ax[1, 1].plot(tm[j:], tab.scatter[k][ok][j:] * 1e-3, color=cols[k], marker="o", ms=3, lw=1)
     d, i = s["detuning"], s["intensity"]
     tc = np.array([tab.temperature(d, x).mean() for x in ii])
     rc = np.array([tab.scattering(d, x) for x in ii]) * 1e-3
-    hc = np.array([tab.hop_rate(d, x, att).sum() for x in ii])
+    hc = np.array([tab.hop_rate(d, x, att, tail_of(s)).sum() for x in ii])
     kw = dict(color=CURRENT_COLOUR, ls="--", lw=1.2, label=f"{d:+.1f} MHz (interpolated)")
     ax[0, 0].plot(ii, tc, **kw)
     ax[0, 1].plot(ii, rc, **kw)
     ax[1, 0].plot(ii, np.maximum(hc, 1e-12), **kw)
-    ax[1, 1].plot(tc, rc, **kw)
-    t0, r0, h0 = tab.temperature(d, i).mean(), tab.scattering(d, i) * 1e-3, tab.hop_rate(d, i, att).sum()
+    jc = int(np.nanargmin(tc)) if np.isfinite(tc).any() else 0
+    ax[1, 1].plot(tc[jc:], rc[jc:], **kw)
+    t0, r0, h0 = tab.temperature(d, i).mean(), tab.scattering(d, i) * 1e-3, tab.hop_rate(d, i, att, tail_of(s)).sum()
     for a, (x, y) in zip(ax.flat, ((i, t0), (i, r0), (i, max(h0, 1e-12)), (t0, r0))):
         a.plot([x], [y], marker="*", ms=11, color=CURRENT_COLOUR, ls="none")
     if live is not None and live["settings"]["detuning"] == d and live["settings"]["intensity"] == i:
@@ -142,7 +162,8 @@ def draw_intensity(fig, tab, s, live, labplot):
         ax[1, 1].plot([tl], [live["scatter"] * 1e-3], color="#CC79A7", marker="s", ms=5, ls="none")
     for a in ax.flat[:3]:
         a.set_xscale("log")
-    ax[1, 0].set_yscale("log")
+    for a in (ax[0, 1], ax[1, 0], ax[1, 1]):
+        a.set_yscale("log")
     labplot.finish(ax[0, 0], "Intensity per beam (mW cm$^{-2}$)", "Temperature (µK)")
     labplot.finish(ax[0, 1], "Intensity per beam (mW cm$^{-2}$)", "Scattering rate (10$^3$ s$^{-1}$)")
     labplot.finish(ax[1, 0], "Intensity per beam (mW cm$^{-2}$)", "Hopping rate, x+y+z (s$^{-1}$)")
@@ -151,7 +172,8 @@ def draw_intensity(fig, tab, s, live, labplot):
     labplot.legend(ax[0, 0], loc="upper center", fontsize="small")
     for a, letter in zip(ax.flat, "abcd"):
         a.text(-0.14, 1.02, letter, transform=a.transAxes, fontweight="bold", va="bottom")
-    labplot.note(ax[1, 0], f"Arrhenius, attempt rate {s.get('attempt')}; full depth", "bottom-right")
+    labplot.note(ax[1, 0], f"Arrhenius, attempt rate {s.get('attempt')}, T: {s.get('hop_t')}; full depth",
+                 "bottom-right")
 
 
 def draw_field(fig, tab, s, scan, labplot):
@@ -166,8 +188,7 @@ def draw_field(fig, tab, s, scan, labplot):
             if c is None:
                 continue
             b, t, tau, bar = c
-            att = attempt_of(s)
-            hop = M.arrhenius_hop_rate(t, tau if att is None else 1e3 / att, bar[None, :])
+            b, hop = tab.field_hop(pair[0], pair[1], ka, attempt_of(s), tail_of(s))
             ax[0].plot(b, t.mean(axis=1), color=AXIS_COLOURS[ka], marker="o", ms=3, lw=1,
                        label=f"B ∥ {AXES[ka]} (table {pair[0]:+.0f} MHz, {pair[1]:g} mW cm$^{{-2}}$)")
             ax[1].plot(b, T.survival(hop, pulse), color=AXIS_COLOURS[ka], marker="o", ms=3, lw=1)
@@ -296,8 +317,12 @@ class MolassesWindow:
         g = group("Molasses")
         self._row(g, "detuning", "Detuning from F=4→F'=5", "MHz", -60.0, -5.0, 1,
                   "Negative = red. Tables: -51 to -10 MHz, total saturation ≤ 0.1.")
-        self._row(g, "intensity", "Intensity per beam", "mW/cm²", 0.05, 3.0, 3,
+        self._row(g, "intensity", "Intensity per beam", "mW/cm²", 0.01, 5.0, 3,
                   "At the atoms, each of the six beams (retro included). Tables: 0.05-3.")
+        self._row(g, "power_uw", "Power per beam", "µW", 0.01, 5.0, 3,
+                  "Sets the intensity (2P/πw²) when changed. Lab: 0.40-0.50 µW at full AOM power (2026-10-29).")
+        self._row(g, "waist_um", "Beam waist (1/e² radius)", "µm", 20.0, 2000.0, 0,
+                  "Li (2009): 140 µm incoming, 100 µm retro (balances the cell losses).")
         self._row(g, "pulse_ms", "Pulse duration", "ms", 0.1, 5000.0, 1,
                   "Duration of the molasses in the survival measurement (survival = exp(-hops × t)).")
         self.attempt = self.tk.StringVar(value=self.s["attempt"])
@@ -312,6 +337,20 @@ class MolassesWindow:
             self._changed("attempt")
         box.bind("<<ComboboxSelected>>", picked)
         ttk.Label(g, text="Γ_h = Γ_a erfc(√(U/k_B T)) per axis. The model's 1/τ_E is ~10× Li's fitted Γ_a.",
+                  font=self.small, foreground="#666666", wraplength=300, justify="left").pack(fill="x")
+        self.hop_t = self.tk.StringVar(value=self.s["hop_t"])
+        f = ttk.Frame(g)
+        f.pack(fill="x", pady=(5, 0))
+        ttk.Label(f, text="Temperature in Γ_h").pack(side="left")
+        box2 = ttk.Combobox(f, textvariable=self.hop_t, values=list(TEMPERATURE_CHOICES), width=24,
+                            state="readonly")
+        box2.pack(side="right")
+
+        def picked2(_=None):
+            self.s["hop_t"] = self.hop_t.get()
+            self._changed("attempt")
+        box2.bind("<<ComboboxSelected>>", picked2)
+        ttk.Label(g, text="Tail: site-to-site spread included (the LC phase ramps average it in time).",
                   font=self.small, foreground="#666666", wraplength=300, justify="left").pack(fill="x")
         g = group("Live Monte Carlo only")
         for key, name in (("bx", "Field along x"), ("by", "Field along y"), ("bz", "Field along z")):
@@ -367,6 +406,11 @@ class MolassesWindow:
         self.rows[key] = text
 
     def _changed(self, key):
+        if key in ("power_uw", "waist_um"):
+            v = round(intensity_from_power(self.s["power_uw"], self.s["waist_um"]), 3)
+            self.s["intensity"] = min(max(v, 0.01), 5.0)
+            self.rows["intensity"].set(f"{self.s['intensity']:.3f}")
+            key = "intensity"
         if key in ("detuning", "intensity", "pulse_ms", "attempt"):
             self.book.mark_dirty()
             self.book.draw_visible()
@@ -390,7 +434,7 @@ class MolassesWindow:
             return
         d, i = s["detuning"], s["intensity"]
         t = tab.temperature(d, i)
-        h = tab.hop_rate(d, i, attempt_of(s))
+        h = tab.hop_rate(d, i, attempt_of(s), tail_of(s))
         r = tab.scattering(d, i)
         flag = "" if tab.inside(d, i) else "   (outside the table: clamped to its edge)"
         sat = M.total_saturation(i, d)

@@ -11,8 +11,18 @@ The tables are the JSON-lines files written by ``scripts/molasses_scan.py``
 Interpolation is bilinear in (detuning, log intensity) on the logarithm of
 the positive quantities (temperature, scattering rate, tau_E), clamped at the
 grid edges (no extrapolation; ``inside`` reports it). Hopping rates are
-computed from the interpolated T and tau_E with the Arrhenius form of
-``model.arrhenius_hop_rate``, so they stay smooth over many decades.
+computed from the interpolated temperature and tau_E with the Arrhenius form
+of ``model.arrhenius_hop_rate``, so they stay smooth over many decades.
+
+Which temperature enters the Arrhenius factor (``use_tail``): by default the
+tail temperature of the ensemble energy distribution (``model.
+tail_temperature_uk``, mean excess above 3 T). At and below the optimum
+intensity the atoms differ strongly from site to site (each samples a
+different molasses polarization; per-atom T spread comparable to T) and the
+tail is 1.5-4x the mean kinetic temperature. The LC phase ramps of the lab
+(30-33 ms, slow compared with tau_E ~ 0.3 ms) make each atom sample this
+distribution in time, so the time-averaged hopping rate follows the
+ensemble tail. ``use_tail=False`` gives the (lower) mean-T estimate.
 
 Survival after a molasses pulse of duration t assumes every hop loses the
 atom from its site (``HOP_IS_LOSS``): P = exp(-sum_i Gamma_h,i t).
@@ -81,6 +91,7 @@ class Tables:
         self.t = np.full((nd, ni, 3), np.nan)
         self.t_err = np.full((nd, ni, 3), np.nan)
         self.tau = np.full((nd, ni, 3), np.nan)
+        self.t_tail = np.full((nd, ni, 3), np.nan)
         self.scatter = np.full((nd, ni), np.nan)
         self.depump = np.full((nd, ni), np.nan)
         self.light_shift = np.full((nd, ni), np.nan)
@@ -91,6 +102,8 @@ class Tables:
             self.t[a, b] = r["t_uk"]
             self.t_err[a, b] = r["t_uk_err"]
             self.tau[a, b] = r["tau_e_ms"]
+            tt = np.asarray(r.get("t_tail_uk", r["t_uk"]), float)
+            self.t_tail[a, b] = np.where(np.isfinite(tt), np.maximum(tt, r["t_uk"]), r["t_uk"])
             self.scatter[a, b] = r["scatter_rate"]
             self.depump[a, b] = r["depump_frac"]
             self.light_shift[a, b] = r["light_shift_uk"]
@@ -128,15 +141,20 @@ class Tables:
     def tau_e(self, detuning, intensity):
         return self._interp_log(self.tau, detuning, intensity)
 
-    def hop_rate(self, detuning, intensity, attempt_per_s=None):
+    def tail_temperature(self, detuning, intensity):
+        """Per-axis tail temperature (uK), never below the kinetic temperature."""
+        return self._interp_log(self.t_tail, detuning, intensity)
+
+    def hop_rate(self, detuning, intensity, attempt_per_s=None, use_tail=True):
         """Arrhenius hopping rate per axis (s^-1) at full depth; attempt rate 1/tau_E unless given."""
         tau = self.tau_e(detuning, intensity) if attempt_per_s is None else 1e3 / attempt_per_s
-        return arrhenius_hop_rate(self.temperature(detuning, intensity), tau, self.barrier)
+        t = self.tail_temperature(detuning, intensity) if use_tail else self.temperature(detuning, intensity)
+        return arrhenius_hop_rate(t, tau, self.barrier)
 
-    def node_hop_rates(self, attempt_per_s=None):
+    def node_hop_rates(self, attempt_per_s=None, use_tail=True):
         """(nd, ni, 3) hopping rates at the grid nodes."""
         tau = self.tau if attempt_per_s is None else 1e3 / attempt_per_s
-        return arrhenius_hop_rate(self.t, tau, self.barrier[None, None, :])
+        return arrhenius_hop_rate(self.t_tail if use_tail else self.t, tau, self.barrier[None, None, :])
 
     # .. field scans --------------------------------------------------------
     def field_pairs(self):
@@ -161,6 +179,26 @@ class Tables:
         t = np.array([p[1] for p in pts])
         tau = np.array([p[2] for p in pts])
         return b, t, tau, np.asarray(pts[0][3], float)
+
+    def field_hop(self, detuning, intensity, axis, attempt_per_s=None, use_tail=True):
+        """(B_mg, hopping rate per axis (n,3)) along one field axis, as hop_rate."""
+        pts = []
+        for r in self.field_rows:
+            if r["detuning"] != detuning or r["intensity"] != intensity:
+                continue
+            bv = np.asarray(r["b_mg"], float)
+            if np.any(np.delete(bv, axis) != 0):
+                continue
+            t = np.asarray(r["t_uk"], float)
+            if use_tail:
+                tt = np.asarray(r.get("t_tail_uk", t), float)
+                t = np.where(np.isfinite(tt), np.maximum(tt, t), t)
+            tau = np.asarray(r["tau_e_ms"], float) if attempt_per_s is None else 1e3 / attempt_per_s
+            pts.append((bv[axis], arrhenius_hop_rate(t, tau, np.asarray(r["barrier_uk"], float))))
+        if not pts:
+            return None
+        pts.sort(key=lambda q: q[0])
+        return np.array([q[0] for q in pts]), np.array([q[1] for q in pts])
 
     def doubling_field(self, detuning, intensity, axis):
         c = self.field_curve(detuning, intensity, axis)
