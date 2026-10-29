@@ -24,7 +24,7 @@ Brewster angle (azimuths 270, 45, 135 deg for pairs 4, 5, 6: 71 deg between
 pairs 5 and 6, 99 deg between pair 4 and either). The cell frame is assumed
 to coincide with the lattice/bias-coil x, y axes (AZIMUTH_OFFSET_DEG = 0);
 neither the azimuths nor that alignment is stated for the molasses in any
-thesis (data request 35).
+thesis (data request 37).
 """
 
 import numpy as np

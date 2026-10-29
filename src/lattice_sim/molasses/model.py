@@ -32,7 +32,7 @@ LATTICE_SPACING_M = 4.8374e-6                      # as fields/lattice_pair.py
 TRAP_FULL_KHZ = (19.0, 16.0, 12.5)                 # x, y, z at full depth (current)
 # Excited-state (6P3/2) to ground (6S1/2) scalar polarizability ratio at 843.222 nm, estimated
 # from Safronova-type reduced matrix elements (6S, 7S, 6D3/2, 6D5/2, 8S, 7D); the tensor part of
-# 6P3/2 is neglected. Status: computed estimate (data request 36: the measured trap shift of the
+# 6P3/2 is neglected. Status: computed estimate (data request 42: the measured trap shift of the
 # molasses resonance from the imaging scan plan, step 1).
 EXCITED_TO_GROUND_LATTICE = -0.32
 REPUMP_DIR = (INV := 1 / np.sqrt(2), -INV, 0.0)    # along the OP/repump beam (-45 deg in x-y)
