@@ -10,7 +10,8 @@ requires-python = ">=3.10"
 dependencies = ["numpy>=1.24", "scipy>=1.10", "pyyaml>=6"]
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "matplotlib>=3.7"]   # the drawing tests and scripts/ import matplotlib
+dev = ["pytest>=7", "matplotlib>=3.7", "numba>=0.59", "sympy>=1.12"]   # drawing tests and scripts/ import matplotlib; molasses tests numba, sympy
+molasses = ["numba>=0.59", "sympy>=1.12"]   # lattice_sim.molasses (Monte Carlo kernels; Clebsch-Gordan algebra)
 viz = ["matplotlib>=3.7"]
 quantum = ["qutip>=5"]
 gpu = ["jax"]

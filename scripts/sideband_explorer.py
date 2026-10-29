@@ -67,7 +67,7 @@ GRADIENT_HALF_SPAN_M = 10e-6
 # MAX_LEVELS, DROPPED_POPULATION and n_levels_for (the level count from the temperature) live in
 # lattice_sim.spectra.sidebands; the explorer reports the dropped population when the cap is reached
 TABLE_ROWS_SHOWN = 9             # per-pair table rows on screen; the rest scroll
-EXTENSIONS = ("explorer_microwave", "explorer_angle", "explorer_grid", "explorer_chain")
+EXTENSIONS = ("explorer_microwave", "explorer_angle", "explorer_grid", "explorer_chain", "explorer_molasses")
 
 
 @dataclass(frozen=True)

@@ -108,3 +108,19 @@ cooling:
   afp_peak_rabi_kHz: {value: {minus2: 6.77, minus1: 4.91}, status: computed, note: "Blackman amplitude area 0.42 T (pulse.h:945), Rabi ~ sqrt(power); calibration taken as the bare (coupling-1) value (cooling/afp.py CAL_IS_BARE_COUPLING); replaces the 20 kHz of Du App. A used until 2026-10-15"}
   initial_temperature_uK: {value: 5, status: thesis, source: "Wu p.26"}
   measured_3d_ground_fraction: {value: 0.96, status: thesis, source: "Du p.48"}
+
+molasses:
+  detuning_MHz:
+    value: {previous: -51, current: open}
+    status: open
+    source: "Maarten, 2026-10-29 ('50ish MHz', then moved closer to resonance); memory: -51 MHz limited by the 75 MHz VCO/VCA of the single-pass AOM"
+  intensity_per_beam_mW_cm2: {value: 0.7, status: thesis, source: "Li p.58 (minimum lattice temperature at ~0.7 mW/cm^2 per beam)", note: "default of model.Config; current value open (data request 33)"}
+  geometry:
+    value: "three beams up through the cell bottom at Brewster's angle (55.4 deg from vertical), p-polarized, retro-reflected s-polarized (lin-perp-lin per pair); azimuths 270, 45, 135 deg from lattice x"
+    status: open
+    source: "Li 2009 (Brewster entry, MOT beam angles 81/117 deg); azimuths assumed (beams.AZIMUTHS_DEG)"
+  pgc_duration_ms: {value: 250, status: thesis, source: "Li p.46"}
+  image_exposure_ms: {value: 50, status: thesis, source: "Li p.54"}
+  hopping_attempt_rate_per_s: {value: 265, status: thesis, source: "Li p.57-58 (Arrhenius fit, T = 10 uK, 15 kHz lattice)"}
+  temperature_after_pgc_uK: {value: {hopping_method: 10, depumping_method: 3.3}, status: thesis, source: "Li p.58, p.71-72"}
+  excited_to_ground_lattice_ratio: {value: -0.32, status: computed, note: "model.EXCITED_TO_GROUND_LATTICE; 6P3/2 / 6S1/2 polarizability at 843.222 nm"}
