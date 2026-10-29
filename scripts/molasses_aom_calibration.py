@@ -30,9 +30,10 @@ sys.path.insert(0, str(REPO / "src"))
 from lattice_sim.molasses import aom  # noqa: E402
 from lattice_sim.viz.style import DOUBLE_COLUMN_IN, apply  # noqa: E402
 
-DARK_UW = 0.086          # 'new' reading at 0.1-1.1 V (AOM below threshold)
+DARK_UW = aom.BACKGROUND_UW["new"]     # meter reading with the beam blocked (room background)
 COL = {"supertime": "#000000", "old": "#0072B2", "new": "#D55E00"}
-LABEL = {"supertime": "Supertime file (rescale 24)", "old": "measured earlier", "new": "measured 2026-10-29"}
+LABEL = {"supertime": "Supertime file (rescale 24)", "old": "measured earlier",
+         "new": "measured 2026-10-29 (background subtracted)"}
 
 
 def write_supertime_file(curves, offset, path):
@@ -69,9 +70,6 @@ def main(argv):
     for k in ("old", "new"):
         _, p, _ = aom.delivered(req, aom.RESCALE_NOW, c, k)
         ax[1].plot(req, p / req, color=COL[k], lw=1, label=LABEL[k])
-    _, p, _ = aom.delivered(req, aom.RESCALE_NOW, c, "new")
-    ax[1].plot(req, np.clip(p - offset, 0, None) / req, color=COL["new"], lw=0.8, ls="--",
-               label=f"2026-10-29, {offset:g} µW dark subtracted")
     for r in (aom.PGC_HOLD_REQUEST, aom.IMAGING_REQUEST):
         ax[1].axvline(r, color="#777777", lw=0.6, ls=":")
     ax[1].axhline(1, color="#000000", lw=0.6)

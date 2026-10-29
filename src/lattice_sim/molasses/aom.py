@@ -22,6 +22,9 @@ CAL_CSV = Path(__file__).resolve().parents[3] / "data" / "measured" / "molasses_
 IMAGING_REQUEST = 5.0          # Molasses-beams value during the exposures (PGC_vapor_loading.dt4, hopping sequences)
 PGC_HOLD_REQUEST = 0.6         # during the 1000 ms PGC-field hold (PGC_vapor_loading.dt4)
 RESCALE_NOW = 24.0             # AOMrescale value since 2026-10-27 03:03 (aomlog.txt)
+# Power-meter reading with the beam blocked (room background), subtracted from each measured curve:
+# 2026-10-29 reads 0.079-0.086 uW at 0-1.1 V, "essentially with the beam blocked" (Maarten, 2026-10-29).
+BACKGROUND_UW = {"new": 0.086, "old": 0.0, "supertime": 0.0}
 
 
 def load_curves(path=CAL_CSV):
@@ -41,16 +44,17 @@ def request_to_volts(request, rescale, file_curve):
     return np.interp(target, p[keep], v[keep])
 
 
-def power_at(volts, curve):
-    """Measured power (uW) at a control voltage, linear interpolation."""
+def power_at(volts, curve, background_uw=0.0):
+    """Measured power (uW) at a control voltage, linear interpolation, background subtracted (>= 0)."""
     v, p = curve
-    return np.interp(volts, v, p)
+    return np.clip(np.interp(volts, v, p) - background_uw, 0.0, None)
 
 
 def delivered(request, rescale, curves, measured="new"):
-    """(volts, delivered power uW, nominal uW) for a request: nominal = what the scaled file promises."""
+    """(volts, delivered power uW, nominal uW) for a request: nominal = what the scaled file promises;
+    the delivered power has the meter background (BACKGROUND_UW) subtracted."""
     volts = request_to_volts(request, rescale, curves["supertime"])
-    return volts, power_at(volts, curves[measured]), np.asarray(request, float)
+    return volts, power_at(volts, curves[measured], BACKGROUND_UW.get(measured, 0.0)), np.asarray(request, float)
 
 
 def relative_power(rescale, reference=RESCALE_NOW, request=IMAGING_REQUEST, curves=None, measured="new"):

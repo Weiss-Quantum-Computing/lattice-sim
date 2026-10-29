@@ -173,16 +173,17 @@ def test_total_saturation_limit():
 
 
 def test_aom_calibration_reproduces_the_measured_imaging_power():
-    """Request 5 at rescale 24 through Supertime's file, then the 2026-10-29 curve: 2.14 uW, against the
-    2.2 uW measured directly out of the fiber (Maarten, 2026-10-29) - two independent routes."""
+    """Request 5 at rescale 24 through Supertime's file, then the 2026-10-29 curve: 2.06 uW after the
+    0.086 uW room background, against 2.2 - 0.086 = 2.11 uW measured directly out of the fiber
+    (Maarten, 2026-10-29) - two independent routes."""
     from lattice_sim.molasses import aom
     c = aom.load_curves()
     v = float(aom.request_to_volts(5.0, 24.0, c["supertime"]))
     assert v == pytest.approx(2.4023, abs=2e-4)
-    assert float(aom.power_at(v, c["new"])) == pytest.approx(2.2, rel=0.05)
+    assert float(aom.delivered(5.0, 24.0, c)[1]) == pytest.approx(2.2 - aom.BACKGROUND_UW["new"], rel=0.05)
     assert float(aom.request_to_volts(24.0, 24.0, c["supertime"])) == pytest.approx(4.189)
     assert float(aom.relative_power(24.0, curves=c)) == pytest.approx(1.0)
-    assert float(aom.relative_power(14.0, curves=c)) == pytest.approx(1.966, abs=0.01)      # not 24/14 = 1.714
+    assert float(aom.relative_power(14.0, curves=c)) == pytest.approx(2.01, abs=0.01)       # not 24/14 = 1.714
     rows = aom.supertime_file_lines(c["new"], offset_uw=0.086)
     vals = np.array([[float(x) for x in r.split("\t")] for r in rows])
     assert vals[0].tolist() == [0.0, 0.0] and np.all(np.diff(vals[:, 1]) >= 0)
