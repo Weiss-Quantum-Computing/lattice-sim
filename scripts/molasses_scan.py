@@ -22,6 +22,7 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 from lattice_sim.molasses import levels as L  # noqa: E402
+from lattice_sim.molasses import aom  # noqa: E402
 from lattice_sim.molasses import model as M  # noqa: E402
 
 OUT = REPO / "data" / "molasses"
@@ -114,9 +115,10 @@ def main(argv):
     elif what == "lab1026":
         # The lab's 2026-10-26 hopping-sequence power scan at +100 MHz (-25.5 MHz): rescale r = 14 ... 24 with
         # request 5; at r = 24 the request gave 2.2 uW out of the fiber, ~0.45 uW per beam, 1.46 mW/cm^2 per
-        # beam (140 um waist). Power taken as ~ 1/r. Total saturation up to 0.14: beyond MAX_SATURATION,
+        # beam (140 um waist). Earlier runs took the power as 24/r (rows kept). Total saturation up to 0.14: beyond MAX_SATURATION,
         # reported as an extrapolation of the model (summary carries the saturation).
-        cfgs = [M.Config(intensity=LAB_1026_I24 * 24.0 / r, detuning=-25.5, n_atoms=128,
+        # power at rescale r from the measured AOM curve (lattice_sim.molasses.aom; 1.97x at r = 14, not 24/14)
+        cfgs = [M.Config(intensity=round(LAB_1026_I24 * float(aom.relative_power(r)), 4), detuning=-25.5, n_atoms=128,
                          t_total_ms=burn(1.0) + 1.7, t_burn_ms=burn(1.0), seed=23) for r in LAB_1026_RESCALE]
         cfgs.sort(key=lambda c: c.intensity)
         run_points("lab1026", cfgs)

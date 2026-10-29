@@ -4,3 +4,5 @@
 *.png binary
 *.npy binary
 *.npz binary
+# Supertime calibration files (volts<TAB>power) are read on the Windows XP control PC: keep CRLF
+data/measured/OM-*.txt text eol=crlf
