@@ -1,0 +1,18 @@
+# Nearest-neighbour hop-loss pairs by direction (direction = move from the loss site to the hop site) for the 2026-10-30
+# hold scans, per band of hold power (fixed: the single power of runs 010, 011, 014, 015); chance = the same count with each shot's hops paired with other shots' losses in the
+# band (5 shuffles). reanalyze.py occupancies, planes 1-7. z: plane index, x, y: lattice columns, rows (CameraGui axes).
+run,power_band_uw,shots,atoms_img1,hops,losses,+z_real,+z_chance,-z_real,-z_chance,+y_real,+y_chance,-y_real,-y_chance,+x_real,+x_chance,-x_real,-x_chance
+013,0.00-0.05,3,396,0,29,0,0,0,0,0,0,0,0,0,0,0,0
+013,0.05-1.05,30,4402,37,2034,10,1,8,2,2,2,1,2,3,2,1,1
+013,1.05-2.55,45,6244,37,658,2,1,6,1,1,1,4,1,3,1,0,1
+013,2.55-3.55,30,4011,314,779,22,12,90,12,11,12,7,12,11,8,8,7
+013,3.55-5.10,45,6127,1058,4172,189,154,255,163,89,106,93,94,62,73,53,74
+016,0.00-0.05,3,255,5,61,0,0,1,0,1,0,0,0,1,0,0,0
+016,0.05-1.05,30,2766,37,2713,8,10,1,5,7,5,3,2,4,3,5,1
+016,1.05-2.55,45,4091,104,722,7,3,9,5,5,3,3,3,27,2,4,5
+016,2.55-3.55,30,2842,642,1481,58,55,83,50,36,49,42,38,180,35,26,34
+016,3.55-5.10,45,4299,461,4061,65,66,78,90,39,53,38,44,67,37,25,25
+014,fixed,20,2019,29,269,2,1,0,1,0,1,1,0,13,1,0,0
+015,fixed,20,1933,13,430,0,0,2,0,0,1,1,0,1,1,4,0
+010,fixed,20,3478,25,205,1,0,5,1,0,0,0,0,0,0,0,0
+011,fixed,20,3005,6,178,1,0,1,0,0,0,0,0,0,0,0,0
