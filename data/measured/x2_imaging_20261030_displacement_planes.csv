@@ -1,0 +1,34 @@
+# 2026-10-30 imaging in the X2 lattice (CameraGui folder 20261029, runs 023-026; log.txt there): both image sets in X2 at
+# full depth, 9 planes each, 20 ms between the sets, corrected Helmholtz zero; fixed dose ~0.20 uW s per exposure
+# (023: 2.2 uW x 100 ms reference). Occupancy re-thresholded with reanalyze.py (planes 1-7); 024 shot 13 dropped (71 hops
+# and 69 losses in one shot). Displacement: CameraGui state analysis (.state, 'Displace 1', pixels; floating-centre fit
+# of each atom in the state image, StateImgSet = 1), for atoms classified in the state image; no state preparation.
+run,plane,atoms,frac_absdisp_gt_1
+023,1,224,0.0312
+023,2,424,0.0660
+023,3,568,0.0616
+023,4,767,0.0717
+023,5,845,0.0828
+023,6,769,0.1222
+023,7,501,0.1277
+024,1,207,0.0290
+024,2,306,0.0294
+024,3,401,0.0449
+024,4,551,0.0563
+024,5,579,0.0604
+024,6,523,0.0841
+024,7,445,0.1213
+025,1,267,0.0037
+025,2,295,0.0102
+025,3,422,0.0142
+025,4,584,0.0205
+025,5,689,0.0203
+025,6,835,0.0263
+025,7,783,0.0409
+026,1,325,0.0031
+026,2,365,0.0110
+026,3,432,0.0116
+026,4,581,0.0138
+026,5,709,0.0212
+026,6,833,0.0252
+026,7,846,0.0272
