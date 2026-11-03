@@ -57,7 +57,7 @@ def main():
             off["row"][s, k] = float(r["row_off_px"]); off["col"][s, k] = float(r["col_off_px"])
             wr[s, k] = float(r["w_rows_px"]); wc[s, k] = float(r["w_cols_px"]); amp[s, k] = float(r["amp"])
     sitemap = read_csv(MEAS / "jitter_20261102_sitemap.csv")
-    fig, ax = plt.subplots(2, 3, figsize=(DOUBLE_COLUMN_IN, 4.6), constrained_layout=True)
+    fig, ax = plt.subplots(2, 3, figsize=(DOUBLE_COLUMN_IN * 1.15, 5.6), constrained_layout=True)
     ax = ax.ravel()
     for a, dy in (("row", 0.0), ("col", -0.4)):
         w = off[a] - np.nanmean(off[a], 1)[:, None]
@@ -69,7 +69,7 @@ def main():
     ax[0].set_xlabel("Time in the shot (s)")
     ax[0].set_ylabel("Position minus the shot mean (px)")
     ax[0].set_ylim(-0.7, 0.3)
-    ax[0].text(0.02, 0.03, "thin: every shot; black: median over shots; grey: the gap between the sets", transform=ax[0].transAxes, fontsize=5.5)
+    ax[0].text(0.02, 0.96, "thin: every shot; black: median; grey: the gap between the sets", transform=ax[0].transAxes, fontsize=5.5, va="top")
 
     for a in ("row", "col"):
         rr = [r for r in al if r["axis"] == a]
@@ -79,7 +79,8 @@ def main():
         ax[1].loglog(tau, float(summ[a]["floor_px"]) / np.sqrt(n), ":", color=COL[a], lw=0.8)
     ax[1].set_xlabel("Averaging time (s)")
     ax[1].set_ylabel("Allan deviation within a shot (px)")
-    ax[1].legend(fontsize=6, loc="upper right", title="dotted: per-picture precision / √n", title_fontsize=6)
+    ax[1].legend(fontsize=6, loc="lower left")
+    ax[1].text(0.98, 0.96, "dotted: per-picture\nprecision / √n", transform=ax[1].transAxes, fontsize=5.5, ha="right", va="top")
     ax[1].set_ylim(0.008, 0.1)
     ax[1].set_xticks([0.17, 0.34, 0.85, 1.7, 3.4])
     ax[1].set_xticklabels(["0.17", "0.34", "0.85", "1.7", "3.4"])
@@ -95,13 +96,12 @@ def main():
     tmin = np.array(tmin)
     for a in ("row", "col"):
         y = np.array([float(r[f"{a}_mean_px"]) for r in shots])
-        ax[2].plot(tmin, y, "o-", color=COL[a], ms=3, lw=0.6, label=f"{'rows' if a == 'row' else 'columns'}: sd {float(summ[a]['sd_shot_px']):.3f} px, "
-                   f"trend {1e3 * UM_PER_PX * float(summ[a]['shot_drift_px_per_min']):+.0f} nm/min")
+        ax[2].plot(tmin, y, "o-", color=COL[a], ms=3, lw=0.6, label=f"{'rows' if a == 'row' else 'columns'}: sd {float(summ[a]['sd_shot_px']):.3f} px")
         sl, ic = np.polyfit(tmin, y, 1)
         ax[2].plot(tmin, sl * tmin + ic, "--", color=COL[a], lw=0.6)
     ax[2].set_xlabel("Time of day since the first shot (min)")
     ax[2].set_ylabel("Per-shot mean position (px)")
-    ax[2].legend(fontsize=6, loc="lower left")
+    ax[2].legend(fontsize=6, loc="lower right")
 
     k = np.arange(1, 2 * npic + 1)
     ax[3].plot(k, np.nanmedian(wr, 0), "s-", color=COL["row"], ms=2.5, lw=0.6, label="rows")
@@ -114,14 +114,16 @@ def main():
     ax[4].set_ylabel("Spot amplitude (10³ counts)")
     ii = np.array([int(r["i"]) for r in sitemap if r["row_offset_px"]]); jj = np.array([int(r["j"]) for r in sitemap if r["row_offset_px"]])
     dr = np.array([float(r["row_offset_px"]) for r in sitemap if r["row_offset_px"]]); dc = np.array([float(r["col_offset_px"]) for r in sitemap if r["row_offset_px"]])
-    ax[5].quiver(jj, ii, dc, dr, angles="xy", scale_units="xy", scale=0.25, width=0.006, color="#009E73")
-    ax[5].quiver([0.5], [8.6], [0.2], [0.0], angles="xy", scale_units="xy", scale=0.25, width=0.006, color="k")
-    ax[5].text(1.6, 8.5, "0.2 px", fontsize=6, va="center")
-    ax[5].set_xlim(-0.5, 8.5); ax[5].set_ylim(-0.5, 9.2)
-    ax[5].set_aspect("equal")
+    fr = np.array([float(r["row_affine_px"]) for r in sitemap if r["row_offset_px"]]); fc = np.array([float(r["col_affine_px"]) for r in sitemap if r["row_offset_px"]])
+    ax[5].quiver(jj, ii, dc, dr, angles="xy", scale_units="xy", scale=0.2, width=0.005, color="#009E73", label="measured")
+    ax[5].quiver(jj, ii, fc, fr, angles="xy", scale_units="xy", scale=0.2, width=0.005, color="0.6", label="affine fit (rotation)")
+    ax[5].quiver([0.0], [9.3], [0.2], [0.0], angles="xy", scale_units="xy", scale=0.2, width=0.005, color="k")
+    ax[5].text(1.3, 9.3, "0.2 px", fontsize=6, va="center")
+    ax[5].set_xlim(-0.8, 8.8); ax[5].set_ylim(-0.8, 9.9)
+    ax[5].legend(fontsize=5.5, loc="upper right")
     ax[5].set_xlabel("Column j")
     ax[5].set_ylabel("Row i")
-    ax[5].set_title("per-site offset pattern (rows sd {0:.2f}, columns sd {1:.2f} px)".format(float(summ["row"]["sitemap_sd_px"]), float(summ["col"]["sitemap_sd_px"])), fontsize=6.5)
+    ax[5].set_title("per-site offset, sd {0:.2f} / {1:.2f} px".format(float(summ["row"]["sitemap_sd_px"]), float(summ["col"]["sitemap_sd_px"])), fontsize=6.5)
     for a_, t_ in zip(ax, "abcdef"):
         a_.text(-0.2, 1.03, t_, transform=a_.transAxes, fontweight="bold", fontsize=9, va="bottom")
     out = REPO / "figures" / "jitter_20261102.png"

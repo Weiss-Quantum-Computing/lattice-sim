@@ -193,6 +193,20 @@ def main():
             if m.sum() >= 10:
                 sitemap[0, i, j] = np.median(A_off_r[m]) - np.median(A_off_r)
                 sitemap[1, i, j] = np.median(A_off_c[m]) - np.median(A_off_c)
+    # the pattern as an affine distortion of the grid: offset = t + M (site position in px); M's antisymmetric part is a
+    # rotation of the lattice axes against the camera's, its diagonal a pitch error, the symmetric off-diagonal a shear
+    gi, gj = np.meshgrid(np.arange(Y), np.arange(X), indexing="ij")
+    okm = np.isfinite(sitemap[0])
+    G = np.column_stack([np.ones(okm.sum()), (gi[okm] - 4) * spacing[0], (gj[okm] - 4) * spacing[1]])
+    aff_r = np.linalg.lstsq(G, sitemap[0][okm], rcond=None)[0]      # drow = a0 + a1 x_row + a2 x_col
+    aff_c = np.linalg.lstsq(G, sitemap[1][okm], rcond=None)[0]      # dcol = b0 + b1 x_row + b2 x_col
+    affine = dict(rotation_mrad=1e3 * 0.5 * (aff_r[2] - aff_c[1]), shear_mrad=1e3 * 0.5 * (aff_r[2] + aff_c[1]),
+                  pitch_err_rows=aff_r[1], pitch_err_cols=aff_c[2],
+                  resid_rows=float(np.std(sitemap[0][okm] - G @ aff_r)), resid_cols=float(np.std(sitemap[1][okm] - G @ aff_c)))
+    print(f"\nper-site offset pattern: sd {np.nanstd(sitemap[0]):.3f} / {np.nanstd(sitemap[1]):.3f} px (rows / columns) over {okm.sum()} sites; "
+          f"affine fit: rotation of the lattice against the camera axes {affine['rotation_mrad']:+.2f} mrad ({np.degrees(affine['rotation_mrad'] / 1e3):+.3f} deg), "
+          f"shear {affine['shear_mrad']:+.2f} mrad, pitch error rows {1e3 * affine['pitch_err_rows']:+.1f}, columns {1e3 * affine['pitch_err_cols']:+.1f} px per 1000 px; "
+          f"residual {affine['resid_rows']:.3f} / {affine['resid_cols']:.3f} px")
     corr_r = A_off_r - np.nan_to_num(sitemap[0][A[:, 3].astype(int), A[:, 4].astype(int)])
     corr_c = A_off_c - np.nan_to_num(sitemap[1][A[:, 3].astype(int), A[:, 4].astype(int)])
     shotmean_sc = np.full((nshots, 2), np.nan)
@@ -292,10 +306,12 @@ def main():
     with open(OUT / "jitter_20261102_sitemap.csv", "w", encoding="utf-8", newline="") as fh:
         fh.write(hdr)
         w = csv.writer(fh)
-        w.writerow(["i", "j", "row_offset_px", "col_offset_px"])
+        fh.write("# affine fit of the pattern: " + ", ".join(f"{k} {v:.4f}" for k, v in affine.items()) + "\n")
+        w.writerow(["i", "j", "row_offset_px", "col_offset_px", "row_affine_px", "col_affine_px"])
         for i in range(Y):
             for j in range(X):
-                w.writerow([i, j] + [round(v, 4) if np.isfinite(v) else "" for v in (sitemap[0, i, j], sitemap[1, i, j])])
+                g = np.array([1.0, (i - 4) * spacing[0], (j - 4) * spacing[1]])
+                w.writerow([i, j] + [round(v, 4) if np.isfinite(v) else "" for v in (sitemap[0, i, j], sitemap[1, i, j])] + [round(float(g @ aff_r), 4), round(float(g @ aff_c), 4)])
 
 
 def allan_pooled(within, n):
