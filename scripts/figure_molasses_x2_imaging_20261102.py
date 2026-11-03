@@ -1,4 +1,4 @@
-"""Figure: X and X2 imaging at -40.5 MHz, 2.2 uW x 150 ms, no state preparation (2026-11-03, runs 013-015).
+"""Figure: X and X2 imaging at -40.5 MHz, 150 ms, no state preparation (2026-11-03, runs 013-017).
 
 From data/measured/molasses_x2_imaging_20261102_{hist,shots,periodicity,summary}.csv
 (scripts/molasses_x2_imaging_20261102.py):
@@ -6,7 +6,7 @@ From data/measured/molasses_x2_imaging_20261102_{hist,shots,periodicity,summary}
 a  fit-height histograms, no-neighbour category: 013 image 1 (X), 014 image 1 and 2 (X2 / X2),
    015 image 2 (X2 after an X image), each normalised to its number of sites;
 b  floating-centre displacement of the state image (image 2) from the image-1 floating centre,
-   014 (X2 -> X2) and 015 (X -> X2), with the calibrated state centres (dashed) and boundary (dotted);
+   014 (X2 -> X2) and 015-017 (X -> X2 with the X2 image at 2.2, 1.8, 1.7 uW), with the calibrated state centres (dashed) and boundary (dotted);
 c  014: per-shot state-I fraction (boundary 0 px) against the per-shot median displacement;
 d  015: coherence of the displacements with an X2 lattice of period p, against the X2 phase step per
    X column (a_X / a_X2 mod 1), at the best p; the 11.47 ratio of a simple standing wave is marked.
@@ -66,7 +66,8 @@ def main():
     ax[0].legend(fontsize=5.5, loc="upper right", bbox_to_anchor=(1.0, 1.0), framealpha=1)
     ax[0].set_ylim(1e-5, 3)
 
-    for run, col, lab in (("014", "#D55E00", "014, X2 → X2"), ("015", "#0072B2", "015, X → X2")):
+    for run, col, lab in (("014", "#D55E00", "014, X2 → X2, 2.2 µW"), ("015", "#0072B2", "015, X → X2, 2.2 µW"),
+                          ("016", "#009E73", "016, X → X2, 1.8 µW"), ("017", "#CC79A7", "017, X → X2, 1.7 µW")):
         x, c = h(run, "displacement")
         ax[1].step(x, c, where="post", color=col, lw=0.8,
                    label=f"{lab}: σ = {float(summ[run]['d_sigma']):.2f} px")

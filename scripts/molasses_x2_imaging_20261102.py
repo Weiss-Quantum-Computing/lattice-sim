@@ -1,8 +1,9 @@
-"""X and X2 imaging at -40.5 MHz, full depth, no state preparation (2026-11-03, runs 012-015).
+"""X and X2 imaging at -40.5 MHz, full depth, no state preparation (2026-11-03, runs 012-017).
 
 All runs: AOM 85 MHz (-40.5 MHz), 50 ms dark between the image sets, 50 shots.
 012 X / X, 2.5 uW x 120 ms; 013 X / X, 2.2 uW x 150 ms; 014 X2 / X2, 2.2 uW x 150 ms;
-015 X / X2, 2.2 uW x 150 ms (016 was aborted after one shot and is not used).
+015 X / X2, 2.2 uW x 150 ms; 016 X / X2, 2.2 / 1.8 uW x 150 ms; 017 X / X2, 2.1 / 1.7 uW x 150 ms
+(power of image 1 / image 2; the camera's image-2 cutoffs were lowered to 5000-7000 for 016-017).
 
 1. Readout per image (re-thresholded as scripts/camera_runs.py): brightness, atom-peak width w1 / B,
    separation, valley thresholds; hops and losses per atom of image 1 (Jeffreys 68 % intervals),
@@ -40,9 +41,10 @@ import molasses_imaging_budget_20261102 as bud  # noqa: E402
 
 DATA = "~/Desktop/Data/Camera Control/20261102"
 OUT = REPO / "data" / "measured"
-RUNS = {"012": ("X", "X", 2.5, 120.0), "013": ("X", "X", 2.2, 150.0),
-        "014": ("X2", "X2", 2.2, 150.0), "015": ("X", "X2", 2.2, 150.0)}
-STATE_RUNS = ("014", "015")
+RUNS = {"012": ("X", "X", 2.5, 2.5, 120.0), "013": ("X", "X", 2.2, 2.2, 150.0),
+        "014": ("X2", "X2", 2.2, 2.2, 150.0), "015": ("X", "X2", 2.2, 2.2, 150.0),
+        "016": ("X", "X2", 2.2, 1.8, 150.0), "017": ("X", "X2", 2.1, 1.7, 150.0)}
+STATE_RUNS = ("014", "015", "016", "017")
 NEAR_THR = 3000.0                 # counts below the threshold that count as 'just missed'
 DMAX_PX = 2.5                     # displacements beyond this are excluded from the periodicity test
 P_SCAN = np.round(np.arange(0.50, 1.61, 0.02), 2)
@@ -97,7 +99,7 @@ def main():
     os.chdir(REPO)
     rng = np.random.default_rng(20261103)
     rrow, srow, prow, hrow, shrow = [], [], [], [], []
-    for run, (l1, l2, pw, t) in RUNS.items():
+    for run, (l1, l2, pw, pw2, t) in RUNS.items():
         h, oc, keep = cr.load(folder, run)
         occ, thr, cat = cr.rethreshold(h[keep], oc[keep], cr.cam_thresholds(folder, run))
         r = cr.analyse(folder, run)
@@ -121,7 +123,7 @@ def main():
         lp, llo, lhi = jeffreys(r["losses"], n)
         im1 = next(q for q in rrow if q["run"] == run and q["image"] == 1 and q["category"] == 0)
         im2 = next(q for q in rrow if q["run"] == run and q["image"] == 2 and q["category"] == 0)
-        row = dict(run=run, lattice1=l1, lattice2=l2, power_uw=pw, exposure_ms=t, shots_used=r["shots_used"],
+        row = dict(run=run, lattice1=l1, lattice2=l2, power_uw=pw, power2_uw=pw2, exposure_ms=t, shots_used=r["shots_used"],
                    bright1=im1["bright"], bright2=im2["bright"], w1b_1=im1["w1_over_b"], w1b_2=im2["w1_over_b"],
                    sep1=im1["sep"], sep2=im2["sep"], atoms1=n, hops=r["hops"], hops_pct=round(hp, 3),
                    hops_lo=round(hlo, 3), hops_hi=round(hhi, 3), losses=r["losses"], losses_pct=round(lp, 2),
@@ -131,6 +133,15 @@ def main():
         for img in (0, 1):
             cnt, edges = np.histogram(hk[:, img, cr.PLANES][cat[:, img, cr.PLANES] == 0], H_BINS)
             hrow += [dict(run=run, kind=f"height_image{img + 1}", bin_lo=e, count=int(c_)) for e, c_ in zip(edges, cnt)]
+        # image-2 false positives on sites empty in image 1 (e0) and image-1 atoms below the image-2 cutoff,
+        # at the camera cutoff and at the valley
+        cam = cr.cam_thresholds(folder, run)
+        c2 = cat[:, 1, cr.PLANES]
+        h2 = hk[:, 1, cr.PLANES]
+        for lab, t2 in (("cam", cam[1]), ("valley", thr[1])):
+            row[f"e0_{lab}"] = round(float(np.mean(h2[o[:, 0] == 0] > t2[c2[o[:, 0] == 0]])), 4)
+            row[f"below_t_{lab}"] = round(float(np.mean(h2[o[:, 0] == 1] < t2[c2[o[:, 0] == 1]])), 4)
+        row["cam_thr2"] = " ".join(str(int(t_)) for t_ in cam[1])
         both = (o[:, 0] == 1) & (o[:, 1] == 1)
         row["sd_log_h1_over_h2"] = round(float(np.log(hk[:, 0, cr.PLANES][both] / hk[:, 1, cr.PLANES][both]).std()), 3)
         if run in STATE_RUNS:
@@ -153,6 +164,8 @@ def main():
                        d_shot_offset_mean=round(float(off.mean()), 3), d_shot_offset_sd=round(float(off.std()), 3),
                        d_sigma_offset_removed=round(float(1.4826 * np.median(np.abs(res))), 3),
                        d_abs_gt_1=round(float(np.mean(np.abs(v) > 1)), 4),
+                       r_abs_gt_1p5=int(np.sum(np.abs(res) > 1.5)), r_abs_gt_2=int(np.sum(np.abs(res) > 2)),
+                       d_gt_state_II_n=int(np.sum(v > -cr.STATE_II_PX)),
                        d_beyond_state_II=round(float(np.mean(v > -cr.STATE_II_PX)), 4),
                        d_beyond_state_I=round(float(np.mean(v < -cr.STATE_I_PX)), 4),
                        state1_frac_min=round(float(frac1.min()), 2), state1_frac_max=round(float(frac1.max()), 2),
@@ -176,7 +189,7 @@ def main():
         srow.append(row)
 
     for q in srow:
-        print(f"{q['run']} {q['lattice1']}/{q['lattice2']} {q['power_uw']} uW x {q['exposure_ms']:.0f} ms: "
+        print(f"{q['run']} {q['lattice1']}/{q['lattice2']} {q['power_uw']}/{q['power2_uw']} uW x {q['exposure_ms']:.0f} ms: "
               f"B {q['bright1']}/{q['bright2']}, w1/B {q['w1b_1']}/{q['w1b_2']}, sep {q['sep1']}/{q['sep2']} | "
               f"hops {q['hops']}/{q['atoms1']} = {q['hops_pct']:.2f} ({q['hops_lo']:.2f}-{q['hops_hi']:.2f}) %, "
               f"NN {q['nn_pairs']} (chance {q['nn_chance']}), hop sites within {NEAR_THR:.0f} below thr "
@@ -188,6 +201,12 @@ def main():
                   f"{q['d_abs_gt_1']:.4f}, beyond state II {q['d_beyond_state_II']:.4f}, beyond state I "
                   f"{q['d_beyond_state_I']:.4f}; state-I fraction {q['state1_frac_min']}-{q['state1_frac_max']}, "
                   f"corr with offset {q['corr_state1_frac_vs_offset']}")
+            n_ = q["state_atoms"]
+            print("    tails (offset removed): " + ", ".join(
+                f"|r| > {lab}: {k} = {jeffreys(k, n_)[0]:.2f} ({jeffreys(k, n_)[1]:.2f}-{jeffreys(k, n_)[2]:.2f}) %"
+                for lab, k in (("1.5", q["r_abs_gt_1p5"]), ("2", q["r_abs_gt_2"]))))
+        print(f"    image-2 cutoffs {q['cam_thr2']}: e0 {q['e0_cam']:.4f} (valley {q['e0_valley']:.4f}); image-1 atoms below "
+              f"cutoff {q['below_t_cam']:.4f} (valley {q['below_t_valley']:.4f})")
         if "x2_period_px" in q:
             print(f"    X2 quantisation: p {q['x2_period_px']} px, column step {q['x2_column_step']}, row step "
                   f"{q['x2_row_step']}, coherence {q['x2_coherence']} (shuffled null {q['x2_null_mean']}, max "
