@@ -498,3 +498,25 @@ Exposure at a fixed 15k counts per plane at −40.5 MHz (6190 counts per saturat
 **The first picture of a cycle is different.** Picture 1 of set 1 has 15 % less amplitude (8000 against 9300–9600 counts) and broader spots (columns 1.79 against 1.53 px 1/e), picture 1 of set 2 does not: the atoms are still being cooled by the imaging molasses during the first 150 ms after the lattice loading and PGC. Later pictures brighten slowly (9300 → 9600 counts over 40 pictures) while the atoms lost per picture (29.7 → 26.7 over the run) are the dim ones.
 
 **Not established.** Motion faster than 150 ms (it appears as spot width, not as a shift; the widths are flat after picture 1 at 1.65 / 1.53 px, so any fast motion is below what a 0.02 px width change would show); the origin of the shot-to-shot offset (objective vs lattice); the y direction's sign convention relative to the lattice axes (rows / columns are camera axes).
+
+## 2026-11-05 — Cooling setpoints from the Supertime sequence
+
+**Source.** `Cooling(30+10)_3ms_X2detect_2EOx_checkcooling_9planes_changed imaging_newramps.dt4` (supertime-analysis, 2026-10-28). Per axis step (6.5 ms): rotate 0.1 ms to the −2 setpoint, −2 AFP 3 ms, EO ramp 0.1 ms to the −1 setpoint, −1 AFP 3 ms, restore 0.1 ms, OP 0.1 ms; x, y, z per cycle (19.5 ms); 30 + 10 cycles; full depth. Trek setpoints in EO volts (rest; loop 1 −2 / −1; loop 2 −2 / −1): X#1 = X#2 0.012; 0.512 / 0.312; 0.650 / 0.512. Y#1 −0.051; 0.449 / 0.249; 0.600 / 0.449. Z#1 0.056; 0.556 / 0.356; 0.670 / 0.556. (`scripts/psc_supertime_setpoints.py`, `data/psc_supertime_setpoints.json`)
+
+**Angles.** With the documented x calibration (90° at 11.412 and 9.99 EO V, two EOs in series), x runs at 8.5° / 5.1° (loop 1) and 10.8° / 8.5° (loop 2), not the ~12° / 6° and 13° / 12° assumed on 2026-10-13. The y and z EOs (one each) have no documented calibration. Two hypotheses: 'single' (each y/z EO rotates like the mean x EO, i.e. half as far per volt as the x pair: 4.2° / 2.5° and 5.5° / 4.2°) and 'same' (as far as x). Neither reproduces the measured axis pattern: z is measured at 0.4 % and predicted at 1.2–1.8 %; rms deviation 0.92–1.6 points.
+
+**Model at the actual voltages** (lab powers, 5 µK; 3D ground fraction, 'single' / 'same', 0 and 1 %/OP dark scatter):
+
+| setpoints | single 0 % | single 1 % | same 0 % | same 1 % |
+|---|---|---|---|---|
+| current, 30 + 10 | 0.9702 | 0.9406 | 0.9734 | 0.9500 |
+| current, 40 + 10 | 0.9881 | 0.9587 | 0.9841 | 0.9608 |
+| current, 50 + 10 | 0.9914 | 0.9625 | 0.9879 | 0.9646 |
+| x at its optimum, 30 + 10 | 0.9713 | 0.9417 | 0.9744 | 0.9510 |
+| 'single' optimum (x, y, z), 30 + 10 | 0.9878 | 0.9645 | 0.9708 | 0.9481 |
+| 'same' optimum (x, y, z), 30 + 10 | 0.9472 | 0.9205 | 0.9878 | 0.9645 |
+
+- **x is near its optimum.** The best x setpoints (0.367 / 0.367, 0.693 / 0.693 EO V at 1 %/OP) gain 0.1 point.
+- **Ten more loop-1 cycles gain 1.1–1.8 points under every hypothesis**; 20 more gain another 0.3–0.4. 30 + 20 is equivalent to 40 + 10. Each cycle takes 19.5 ms. Ten extra cycles add 30 enabled ramps on Trek X#1 and X#2, so the custom echo ramps move from numbers 128–135 to 158–165 and `ramp path.csv` must be re-pointed.
+- **The y/z gain depends on the unknown calibration.** In degrees the optimum is the same under both hypotheses (loop 1: x 6° / 6°, y 5° / 6°, z 6° / 6.5°; loop 2: 10–12°); in EO volts it differs by 2×. The matching optimum gains 1.4–2.4 points over the current setpoints; the other hypothesis' optimum loses up to 2.3 points (the 'single' optimum loses only 0.2–0.3 points if 'same' holds). y/z setpoints should not be changed before the y/z EO calibration is measured (data request 43).
+

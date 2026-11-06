@@ -56,6 +56,8 @@ values or guesses and are flagged in `scripts/p3_echo_analysis.py`.
 30. **Reference frequency definition**: is "Reference fc" the carrier measured at θ = 0 (assumed), and were the −1 / −2 offsets set on cold or hot atoms? The carrier moves by −2.1 / −1.1 / −0.6 kHz (x / y / z) at 12°.
 31. **OP beam direction** relative to the lattice axes (assumed (x̂ + ŷ)/√2), and the ER(θ) of the y and z rotating arms near 0–15°. *Enters as* `OP_BEAM_DIRECTION_LAB`, `EXTINCTION_RATIO` (2×10³ on all axes).
 
+43. **Rotation per EO volt of the y and z EOs** (Trek Y#1, Z#1; one EO each). The x EOs are documented (90° at 11.412 / 9.99 EO V); y and z are not. One crossed-analyzer (or ramp-polarimeter) measurement of the 90° point of each, or the Δn = −1 sideband strength against Trek voltage on cold atoms, decides the cooling setpoints: the y/z optimum in EO volts differs by 2× between the two hypotheses, and setting it on the wrong one costs up to 2.3 points of 3D ground fraction (findings 2026-11-05). *Enters as* `V90_YZ_SINGLE` in `scripts/psc_supertime_setpoints.py`.
+
 ## H. Cluster state
 
 32. **Phase of the first π/2 pulse** relative to the echo π pulse (R_x(π/2), i.e. √X, as in Du, or R_y(π/2)). It decides which atoms carry X- and which Y-type stabilizers, and therefore which atoms get the Z(π/2) correction (even degree for √X). *Enters as* the `phase_q` of the first step of `cluster.sequence.cluster_sequence`.
